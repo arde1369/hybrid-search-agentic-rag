@@ -1,4 +1,5 @@
 from pipeline.prompts import build_reflection_prompt
+import os
 
 
 def reflect_node(pipeline, state):
@@ -18,6 +19,6 @@ def reflect_node(pipeline, state):
 
 
 def should_continue_refining(state):
-    if not state.get("revised", False) or state.get("attempts", 0) >= 2:
+    if not state.get("revised", False) or state.get("attempts", 0) >= int(os.getenv("MAX_REFINE_ATTEMPTS", 2)):
         return "end"
     return "refine"
