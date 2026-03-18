@@ -266,30 +266,7 @@ The system should be fully driven by environment configuration for:
 - Log route decisions, validation outcomes, and fallback events.
 - Track retrieval confidence metrics for troubleshooting.
 
-## 16. Security and Governance
-
-1. Treat API keys and credentials as secrets; avoid storing real values in source control.
-2. Restrict database permissions to read-only where possible.
-3. Redact sensitive data from logs and traces.
-4. Enforce citation transparency for auditability.
-
-## 17. Risks and Tradeoffs
-
-1. Prompt-driven planning may produce variability in route quality.
-2. Regex-style SQL validation can miss edge SQL syntax variants.
-3. Reflection loops improve quality but increase latency.
-4. Single-chunk final semantic answer can miss multi-chunk context in complex topics.
-5. Multi-modal processing adds model weight and runtime costs.
-
-## 18. Future Design Enhancements
-
-1. Move all final-answer assembly to backend so all clients receive identical response behavior.
-2. Add typed route/result contracts for stronger runtime safety.
-3. Add automated evaluation harness for routing precision and answer faithfulness.
-4. Introduce policy controls for confidence-based abstention.
-5. Add richer citation metadata (section title, heading path, timestamp).
-
-## 19. Sequence Diagram
+## 16. Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -324,32 +301,3 @@ sequenceDiagram
   Orchestrator-->>UI: Final cited answer
   UI-->>User: Concise response + source/page
 ```
-
-## 20. Operational Runbook (Conceptual)
-
-### Start Services
-
-- Start all required services (application, relational DB, vector DB, LLM runtime).
-
-### Reset Persistent Data
-
-- Stop services and clear persisted volumes when clean re-indexing is required.
-
-### Verify Health
-
-- Verify web endpoint.
-- Verify relational DB connectivity.
-- Verify vector DB endpoint.
-- Verify LLM/embedding endpoint.
-
-### Common Failure Modes
-
-- Embedding mismatch between ingestion and retrieval.
-- Invalid structured route due to schema drift.
-- Low-confidence semantic evidence rejected by threshold.
-- Missing source metadata leading to weak citations.
-
----
-
-Version: 2.0 (Pre-Implementation Narrative Style)
-Date: 2026-03-17
