@@ -1,8 +1,8 @@
-# Capstone Application Design Document
+#Capstone Application Design Document
 
 ## 1. Purpose and Scope
 
-This document describes the current design of the Capstone application, an agentic Retrieval-Augmented Generation (RAG) system that combines:
+This document describes the design of this agentic Retrieval-Augmented Generation (RAG) system that combines:
 
 - Structured query answering from MySQL.
 - Semantic retrieval from ChromaDB vector collections.
@@ -78,65 +78,9 @@ flowchart TD
     UI -->|Official vector answer summary| OLLAMA
 ```
 
-## 4. Repository Structure and Responsibilities
+## 4. Execution Design
 
-- Entry point:
-  - main.py
-
-- Frontend:
-  - frontend/streamlit_app.py
-  - frontend/pages/query_page.py
-  - frontend/pages/upload_page.py
-  - frontend/services/pipeline_service.py
-  - frontend/services/upload_service.py
-  - frontend/services/query_feedback_service.py
-  - frontend/utils/answer_formatter.py
-
-- Pipeline orchestration:
-  - pipeline/rag_pipeline.py
-  - pipeline/nodes/router.py
-  - pipeline/nodes/executor.py
-  - pipeline/nodes/reflect.py
-
-- SQL pipeline internals:
-  - pipeline/nodes/sql/generation.py
-  - pipeline/nodes/sql/validation.py
-  - pipeline/nodes/sql/invocation.py
-  - pipeline/nodes/sql/safeguards.py
-
-- Vector pipeline internals:
-  - pipeline/nodes/vector/routing.py
-  - pipeline/nodes/vector/answer_validation.py
-
-- Prompts:
-  - pipeline/prompts/router_prompt.py
-  - pipeline/prompts/sql_generation_prompt.py
-  - pipeline/prompts/sql_repair_prompt.py
-  - pipeline/prompts/reflection_prompt.py
-  - pipeline/prompts/vector_answer_prompt.py
-
-- Data access:
-  - dao/sql/sql_dao.py
-  - dao/vector/chroma_db.py
-
-- Ingestion processors:
-  - pdf_processing/pdf_processor_text.py
-  - pdf_processing/multi_modal_processor.py
-  - docx_processing/docx_processor.py
-
-- State types:
-  - state/rag_reflection_state.py
-
-- Infra/config:
-  - docker-compose.yml
-  - Dockerfile
-  - .env
-  - init/schema.sql
-  - seed_data.sql
-
-## 5. Execution Design
-
-### 5.1 Graph State
+### 4.1 Graph State
 
 The graph uses RAGReflectionState fields including:
 
@@ -147,7 +91,7 @@ The graph uses RAGReflectionState fields including:
 - retrieved_docs: all reranked docs.
 - reflection, revised, attempts: refinement loop controls.
 
-### 5.2 Router Node Design
+### 4.2 Router Node Design
 
 The router performs:
 
@@ -171,7 +115,7 @@ The router performs:
 
 Fallback behavior exists if JSON parsing fails.
 
-### 5.3 SQL Route Reliability Design
+### 4.3 SQL Route Reliability Design
 
 SQL pipeline reliability is achieved with layered safeguards:
 
@@ -187,7 +131,7 @@ SQL pipeline reliability is achieved with layered safeguards:
 - Hard block for invalid SQL:
   - route marked blocked_invalid_sql/regeneration_error and skipped.
 
-### 5.4 Vector Route Design
+### 4.4 Vector Route Design
 
 Vector routes use explicit embedding paths to avoid embedding-function conflicts and dimensional mismatch.
 
@@ -198,7 +142,7 @@ Vector routes use explicit embedding paths to avoid embedding-function conflicts
 
   similarity = 1 - distance / 2, clamped to [0, 1]
 
-### 5.5 Reranking and Validation
+### 4.5 Reranking and Validation
 
 - Reranker:
   - Cohere rerank model if API key is configured.
@@ -210,15 +154,15 @@ Vector routes use explicit embedding paths to avoid embedding-function conflicts
   - If below threshold, returns fallback document with:
     - I could not find related information.
 
-### 5.6 Reflection Loop
+### 45.6 Reflection Loop
 
 - Reflection prompt evaluates answer completeness.
 - If reflection is not YES, route refinement continues.
 - Max attempts currently capped at 2.
 
-## 6. Frontend Design
+## 5. Frontend Design
 
-### 6.1 Upload Workflow
+### 5.1 Upload Workflow
 
 Upload page supports:
 
@@ -237,7 +181,7 @@ Flow:
 6. Documents + metadata + embeddings are inserted into Chroma.
 7. Temp file is deleted.
 
-### 6.2 Query Workflow and Official Answer
+### 5.2 Query Workflow and Official Answer
 
 For query rendering:
 
@@ -250,33 +194,33 @@ For query rendering:
 
 The official vector answer is intended to avoid raw chunk dumping and provide concise query-specific responses.
 
-## 7. Prompting Strategy
+## 6. Prompting Strategy
 
-### 7.1 Router Prompt
+### 6.1 Router Prompt
 
 - Produces route JSON.
 - Includes tool catalog, schema context, and few-shot examples.
 - Encourages decomposition and mixed-route planning.
 
-### 7.2 SQL Generation/Repair Prompts
+### 6.2 SQL Generation/Repair Prompts
 
 - SQL generation prompt: produce one valid SELECT using provided schema.
 - SQL repair prompt: repair invalid SQL using DB error + schema context.
 
-### 7.3 Reflection Prompt
+### 6.3 Reflection Prompt
 
 - Binary completeness check with explanation.
 
-### 7.4 Vector Final Answer Prompt
+### 6.4 Vector Final Answer Prompt
 
 - Summarize single best vector chunk in 2-4 sentences.
 - Address user question directly.
 - End with citation line:
   - More info: <source document>, page <page>
 
-## 8. Data Model and Storage
+## 7. Data Model and Storage
 
-### 8.1 MySQL
+### 7.1 MySQL
 
 Primary tables in initialization:
 
@@ -290,7 +234,7 @@ Notes:
 - init/schema.sql and seed_data.sql contain comments indicating historical schema/fk inconsistencies and migration notes.
 - The runtime SQL schema inspection is the source of truth for route validation.
 
-### 8.2 Chroma Collections
+### 7.2 Chroma Collections
 
 Observed collection classes:
 
@@ -308,7 +252,7 @@ Vector metadata typically includes:
 - distance
 - similarity_score
 
-## 9. Configuration Design
+## 8. Configuration Design
 
 Environment-driven configuration includes:
 
@@ -333,9 +277,9 @@ Environment-driven configuration includes:
   - COHERE_API_KEY
   - cohere_rerank_model
 
-## 10. Deployment and Runtime
+## 9. Deployment and Runtime
 
-### 10.1 Containers
+### 9.1 Containers
 
 docker-compose includes:
 
@@ -346,21 +290,21 @@ docker-compose includes:
 
 Volumes are used for persistence.
 
-### 10.2 Application Container
+### 9.2 Application Container
 
 - Python 3.11 slim base image.
 - Dependencies installed from requirements.txt.
 - Streamlit launched on port 8501.
 - Healthcheck on /_stcore/health.
 
-## 11. Performance and Scalability Considerations
+## 10. Performance and Scalability Considerations
 
 - Router caches schema and few-shot sections for 120 seconds.
 - Fast-path bypasses LLM routing for clear vector-only queries.
 - Optional multiprocessing for schema overlap checks when workload size justifies process overhead.
 - Reranking may add latency and external dependency risk when Cohere is enabled.
 
-## 12. Error Handling and Fallbacks
+## 11. Error Handling and Fallbacks
 
 - Router:
   - JSON parsing fallback and deterministic route fallback.
@@ -375,7 +319,7 @@ Volumes are used for persistence.
 - Vector answer summarization:
   - deterministic truncation fallback if LLM summarization fails.
 
-## 13. Security and Compliance Notes
+## 12. Security and Compliance Notes
 
 Current repository state indicates sensitive keys in environment config. Recommended actions:
 
@@ -389,7 +333,7 @@ Additional recommendations:
 - Add query timeout limits for DB and vector operations.
 - Add request logging redaction for sensitive prompts/results.
 
-## 14. Known Design Constraints and Risks
+## 13. Known Design Constraints and Risks
 
 - Route generation depends heavily on prompt quality and model output format.
 - SQL validation is regex-based and may not cover full SQL grammar complexity.
@@ -397,7 +341,7 @@ Additional recommendations:
 - Multi-modal CLIP path introduces heavy model footprint and startup cost.
 - Current best-document strategy for vector output may miss multi-chunk answers for complex questions.
 
-## 15. Extensibility Roadmap
+## 14. Extensibility Roadmap
 
 1. Introduce typed route/result schemas with Pydantic models across node boundaries.
 2. Move UI-side vector summarization into backend node for consistent API behavior across clients.
@@ -412,7 +356,7 @@ Additional recommendations:
    - citation rendering.
 5. Add configurable chunk filtering thresholds via env rather than UI code constants.
 
-## 16. End-to-End Sequence (Query)
+## 15. End-to-End Sequence (Query)
 
 ```mermaid
 sequenceDiagram
@@ -455,7 +399,7 @@ sequenceDiagram
     UI-->>User: Official answer + citation
 ```
 
-## 17. Operational Runbook (Quick)
+## 16. Operational Runbook (Quick)
 
 ### Start
 
@@ -481,7 +425,7 @@ sequenceDiagram
 - SQL blocked:
   - Inspect route validation_status and SQL regeneration logs.
 
-## 18. Ownership and Change Guidelines
+## 17. Ownership and Change Guidelines
 
 - Prompt changes should be versioned and tested with route fixtures.
 - Any metadata schema change for vector docs must update:
@@ -492,6 +436,3 @@ sequenceDiagram
 
 ---
 
-Document version: 1.0
-Generated on: 2026-03-17
-Repository: Capstone
