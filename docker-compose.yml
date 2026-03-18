@@ -1,0 +1,81 @@
+version: '3.9'
+
+services:
+  mysql:
+    image: mysql:9
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: company_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: pass
+    ports:
+      - "3306:3306"
+    volumes:
+      # Mount init scripts to run on first container start
+      - ./init:/docker-entrypoint-initdb.d
+      - mysql_data:/var/lib/mysql
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+      - ./zscaler-root.cer:/usr/local/share/ca-certificates/zscaler-root.crt:ro
+    entrypoint: ["/bin/sh", "-c", "update-ca-certificates && ollama serve & sleep 5 && ollama pull mistral && ollama pull nomic-embed-text && tail -f /dev/null"]
+
+  chromadb:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chromadb
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/.chroma/index
+    environment:
+      - IS_PERSISTENT=TRUE
+
+  application:
+    build:
+       context: .
+       dockerfile: Dockerfile
+    container_name: application
+    restart: always
+    ports:
+      - "8501:8501"
+    depends_on:
+      - mysql
+      - chromadb
+      - ollama
+    environment:
+      # SQL Database Configuration (lowercase - as expected by SQLDAO)
+      - sql_db_host=mysql
+      - sql_db_port=3306
+      - sql_db_user=user
+      - sql_db_password=pass
+      - sql_db_name=company_db
+      
+      # ChromaDB Configuration (lowercase - as expected by ChromaDB)
+      - chroma_db_host=chromadb
+      - chroma_db_port=8000
+      
+      # Ollama Configuration (lowercase - as expected by Pipeline)
+      - ollama_host=ollama
+      - ollama_port=11434
+      - ollama_model_name=mistral
+      - ollama_embedding_model_name=nomic-embed-text
+      
+      # Cohere Reranker Configuration (uppercase - as per cohere SDK)
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - cohere_rerank_model=rerank-v4.0
+    volumes:
+      - .:/app
+    working_dir: /app
+
+volumes:
+  mysql_data:
+  chroma_data:
+  ollama_models:
