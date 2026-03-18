@@ -2,7 +2,7 @@
 
 ## 1. Document Purpose
 
-This document defines the target architecture and design behavior for a hybrid search, agentic RAG application. It is intentionally written as a pre-implementation design artifact, focusing on capabilities, responsibilities, and decision logic rather than code-level details.
+This document defines the target architecture and design behavior for a hybrid search, agentic RAG application.
 
 ## 2. Product Vision
 
