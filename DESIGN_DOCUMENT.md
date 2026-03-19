@@ -1,269 +1,263 @@
-# Capstone System Design Document
+# System Design Document
 
-## 1. Document Purpose
+## 1. Purpose
 
-This document defines the target architecture and design behavior for a hybrid search, agentic RAG application.
+This document defines the pre-implementation architecture, requirements, and delivery plan for an enterprise question-answering platform that combines structured data retrieval, unstructured knowledge retrieval, and language-model reasoning.
 
-## 2. Product Vision
+## 2. Product Scope
 
-The system should answer enterprise questions by intelligently combining:
+The product will allow users to:
 
-- Structured data access (relational database).
-- Unstructured knowledge retrieval (vector database).
-- LLM-driven planning and synthesis.
+- Upload enterprise documents into searchable knowledge collections.
+- Ask natural-language questions.
+- Receive concise, source-aware answers.
+- Ask follow-up questions within the same conversational session.
 
-The user experience should remain simple: upload knowledge sources, ask questions naturally, and receive concise, cited answers.
+The system will support both:
 
-## 3. Design Goals
+- Structured retrieval from a relational data source.
+- Semantic retrieval from a vector knowledge store.
 
-1. Deliver accurate answers for both tabular and narrative queries.
-2. Automatically choose the best retrieval strategy (SQL, vector, or mixed).
-3. Preserve answer quality through validation, reranking, and iterative reflection.
-4. Provide source-aware citations in final answers.
-5. Keep the system configurable by environment and deployable in containers.
+## 3. Design Objectives
 
-## 4. Non-Goals
+1. Provide accurate answers across both structured and unstructured enterprise domains.
+2. Select the best retrieval strategy automatically (structured, semantic, or mixed).
+3. Preserve response quality through validation, reranking, and reflection.
+4. Enforce safety controls for sensitive identifier handling.
+5. Preserve conversational continuity for follow-up questions.
+6. Keep deployment cloud-ready and container-compatible.
 
-1. This system is not designed for write-back transactional workflows.
-2. This system is not intended to execute destructive database operations.
-3. This system is not a generic data warehouse orchestration platform.
+## 4. Out of Scope
+
+1. Transactional write-back workflows to operational systems.
+2. Destructive data operations through user prompts.
+3. Full business-process orchestration across external systems.
 
 ## 5. High-Level Architecture
 
-### 5.1 Logical Components
+### 5.1 Logical Layers
 
-- User Interface Layer:
-  - Query experience.
-  - Document upload and collection management.
+- Experience Layer:
+  - Document upload workflow.
+  - Query and follow-up interaction workflow.
 - Orchestration Layer:
-  - Multi-step reasoning graph for planning, execution, and reflection.
-- Retrieval Layer:
-  - SQL retrieval for structured requests.
-  - Vector retrieval for semantic/policy requests.
-- Reasoning Layer:
   - Route planning.
-  - SQL generation/repair guidance.
-  - Reflection-based refinement.
-  - Final answer summarization.
+  - Multi-step execution.
+  - Reflection-driven refinement.
+- Retrieval Layer:
+  - Relational query execution for structured intents.
+  - Vector similarity retrieval for semantic intents.
 - Quality Layer:
-  - Similarity threshold checks.
-  - Optional reranking.
-  - Output formatting and citation enforcement.
-- Data Stores:
-  - Relational database for operational records.
-  - Vector database for document chunks and embeddings.
+  - Schema validation.
+  - Similarity thresholding.
+  - Candidate reranking.
+  - Answer summarization and citation formatting.
+- Safety Layer:
+  - Prompt-level sensitive-input checks.
+  - Response-level sensitive-content suppression.
+- Data Layer:
+  - Relational database.
+  - Vector database.
 
 ### 5.2 Deployment Components
 
-- Application service (web UI + orchestration runtime).
+- Web application service.
 - Relational database service.
 - Vector database service.
-- LLM/embedding runtime service.
+- Model inference service.
 
 ### 5.3 Architecture Diagram
 
 ```mermaid
 flowchart TD
-  U[User] --> UI[Web UI]
-  UI --> ORCH[Orchestration Graph]
+  User --> UI[User Interface]
+  UI --> ORCH[Orchestration Engine]
 
   ORCH --> PLAN[Route Planning]
   PLAN --> EXEC[Execution]
-  EXEC --> REF[Reflection]
-  REF -->|Refine if needed| PLAN
-  REF -->|Complete| OUT[Final Answer]
+  EXEC --> REFLECT[Reflection]
+  REFLECT -->|Refine| PLAN
+  REFLECT -->|Complete| ANSWER[Final Answer]
 
-  EXEC --> SQL[(Relational DB)]
-  EXEC --> VDB[(Vector DB)]
+  EXEC --> SQL[(Relational Data Store)]
+  EXEC --> VDB[(Vector Data Store)]
 
-  OUT --> CITES[Cited Response]
+  UI --> INGEST[Document Ingestion]
+  INGEST --> EMBED[Embedding Generation]
+  EMBED --> VDB
 
-  UI --> UP[Upload Pipeline]
-  UP --> EMB[Embedding Service]
-  EMB --> VDB
-
-  PLAN --> LLM[LLM Service]
-  REF --> LLM
-  OUT --> LLM
+  PLAN --> LLM[Language Model]
+  REFLECT --> LLM
+  ANSWER --> LLM
 ```
 
-## 6. End-to-End Query Flow
+## 6. End-to-End Query Lifecycle
 
-1. User submits a natural-language question.
-2. System classifies intent and decomposes into atomic sub-questions.
-3. Each sub-question is assigned to:
-   - Structured retrieval,
-   - Semantic retrieval,
-   - or mixed execution path.
-4. Retrieval executes and returns candidate evidence.
-5. Evidence is optionally reranked.
-6. Vector evidence is validated against a similarity threshold.
-7. Reflection evaluates completeness and may trigger one refinement loop.
-8. Final response is generated as concise user-facing text with source citations.
+1. User submits a question.
+2. System loads session context and conversation thread identity.
+3. Planner decomposes question into one or more sub-questions.
+4. Each sub-question is assigned a retrieval path.
+5. Retrieval executes and returns candidate evidence.
+6. Candidate evidence is validated and reranked.
+7. Reflection checks completeness and decides whether to refine.
+8. Final answer is summarized and returned with source attribution.
 
-## 7. Routing Design
+## 7. Routing Strategy
 
 ### 7.1 Routing Principles
 
-- Prefer structured retrieval when query intent maps to known schema entities.
-- Prefer semantic retrieval for policy, guideline, or narrative requests.
-- Use mixed routing when a question combines both structured and unstructured intent.
+- Prefer structured retrieval when intent maps to known schema entities.
+- Prefer semantic retrieval for policy, guideline, and narrative content.
+- Use mixed execution when a question spans structured and unstructured domains.
 
-### 7.2 Decomposition Policy
+### 7.2 Decomposition Rules
 
-- Break compound questions into independent sub-questions.
-- Ensure each sub-question can be handled by one retrieval mode.
+- Split compound questions into atomic sub-questions.
+- Keep each sub-question independently answerable.
 - Preserve traceability from each sub-question to its evidence.
 
-### 7.3 Fallback Strategy
+### 7.3 Fallback Behavior
 
-- If route generation is uncertain, use deterministic heuristics:
-  - schema overlap suggests structured path,
-  - otherwise semantic path.
-- If parsing/planning fails, return safe, minimal fallback routes.
+- If planning output is invalid, apply deterministic fallback routing.
+- If structured retrieval is invalid or unsafe, route to semantic retrieval.
+- If no reliable route is available, return a bounded safe response.
 
 ## 8. Structured Retrieval Design
 
-### 8.1 Safety and Reliability
+### 8.1 Validation and Guardrails
 
-- Enforce read-only query intent.
-- Validate table and column references against live schema metadata.
-- Attempt bounded regeneration/repair when schema mismatches occur.
-- Block invalid structured queries when they cannot be safely repaired.
+- Validate generated queries against live schema metadata.
+- Reject unknown tables and unknown columns.
+- Apply bounded repair attempts for recoverable issues.
+- Reroute to semantic retrieval when structured path remains invalid.
 
-### 8.2 Schema Awareness
+### 8.2 Reliability Controls
 
-- Maintain live schema context for planning quality.
-- Use schema context as authoritative source for validation.
+- Restrict to non-destructive query intent.
+- Record structured route validation outcomes for observability.
+- Prevent invalid structured errors from becoming user-visible failures.
 
 ## 9. Semantic Retrieval Design
 
-### 9.1 Embedding Consistency
+### 9.1 Collection Management
 
-- All query and ingestion paths must use explicit embedding generation.
-- Retrieval should avoid implicit server-side embedding defaults that can cause dimensional mismatch.
+- Segment vector collections by knowledge domain.
+- Reserve system collections for planning examples and reasoning aids.
+- Exclude reserved collections from user-facing retrieval.
 
-### 9.2 Collection Selection
+### 9.2 Retrieval Quality
 
-- Prefer automatic collection selection for query-time retrieval.
-- Exclude designated system collections (for few-shot examples) from user-answer retrieval.
+- Normalize distance scores to comparable similarity values.
+- Enforce configurable similarity thresholds.
+- Reject below-threshold evidence before answer generation.
 
-### 9.3 Similarity Handling
+### 9.3 Multi-Modal Ingestion
 
-- Retrieval returns distances from vector search.
-- Distances are normalized to a 0-1 similarity scale for downstream quality logic.
-- Similarity threshold is configurable; below-threshold evidence is rejected.
+- Process PDF documents through a multi-modal path.
+- Preserve text and image-derived evidence.
+- Store page metadata with human-readable numbering.
 
 ## 10. Answer Quality Design
 
-### 10.1 Candidate Quality Controls
+### 10.1 Candidate Ordering
 
-- Optional reranking improves candidate ordering.
-- Threshold validation prevents low-confidence semantic answers.
-- Short or low-information chunks may be filtered from final-answer selection.
+- Apply reranking after retrieval and normalization.
+- Keep fallback behavior when reranking service is unavailable.
 
-### 10.2 Final Answer Composition
+### 10.2 Final Response Composition
 
-- For semantic answers, select the strongest evidence chunk using:
-  - highest similarity,
-  - then lowest distance as tie-breaker.
-- Generate concise answer text targeted to the user question.
-- Do not present raw retrieved chunk text as the final answer.
-- Always include source citation with document and page when available.
+- Select highest-confidence evidence.
+- Produce concise summaries, not verbatim chunk dumps.
+- Include one citation line with source and page context.
 
-### 10.3 Reflection-Based Refinement
+### 10.3 Reflection Loop
 
-- Evaluate whether the answer fully addresses the question.
-- Allow bounded iterative refinement to improve completeness.
+- Evaluate completeness after execution.
+- Permit bounded refinement iterations.
+- Stop when answer is complete or attempt limit is reached.
 
-## 11. Upload and Knowledge Ingestion Design
+## 11. Conversation and Session Design
 
-### 11.1 Supported Content Types
+### 11.1 Conversation Memory
 
-- PDF (text and multi-modal content including images).
-- DOCX (structured and unstructured extraction options).
+- Persist orchestration checkpoints across turns within the same session thread.
+- Reuse the same session thread identity for follow-up questions.
+- Regenerate session thread identity only on explicit user reset.
 
-### 11.2 Ingestion Pipeline
+### 11.2 Session Controls
 
-1. Accept file upload.
-2. Parse and chunk content.
-3. Enrich metadata (source file, page, chunk index, mode).
-4. Generate embeddings explicitly.
-5. Store chunk text, metadata, and embeddings in selected collection.
+- Provide a visible session reset control in the query experience.
+- Surface active session identity for troubleshooting continuity.
+- Clear session-scoped answer state and feedback state on reset.
 
-### 11.3 Metadata Requirements
+## 12. Ingestion and Metadata Design
 
-Minimum metadata fields for citation-quality outputs:
+### 12.1 Supported Inputs
 
-- source file identifier.
-- page or section indicator.
-- chunk index.
-- retrieval scores (distance/similarity).
+- PDF documents.
+- Structured and unstructured word-processing documents.
 
-## 12. Data Model Considerations
+### 12.2 Ingestion Stages
 
-### 12.1 Relational Domain
+1. File acceptance and temporary storage.
+2. Content extraction and chunking.
+3. Metadata enrichment.
+4. Embedding generation.
+5. Storage of documents, metadata, and vectors.
 
-Representative entities include employee, contract, project, and assignment relationships. The system assumes schema can evolve and therefore depends on runtime schema introspection rather than static SQL assumptions.
+### 12.3 Metadata Requirements
 
-### 12.2 Vector Domain
+Minimum metadata should include:
 
-Vector collections should be segmented by knowledge domain and use consistent embedding models. Reserved collections may store curated examples for planning support and should not be mixed into normal user retrieval.
+- Source document identifier.
+- Page or section reference.
+- Chunk index.
+- Retrieval scoring fields.
 
-## 13. Prompting Strategy
+## 13. Safety and Compliance Requirements
 
-### 13.1 Planning Prompt
+### 13.1 Sensitive Identifier Policy
 
-- Produces machine-readable route plans.
-- Includes tool context, schema context, and few-shot examples.
-- Emphasizes decomposition and route rationale.
+- The system must deny requests for social security numbers.
+- The system must deny prompt input containing social security number values.
+- The system must return a fixed policy message for denied requests.
 
-### 13.2 Structured Query Prompting
+### 13.2 False-Positive Reduction
 
-- One prompt family for generating structured read queries.
-- One prompt family for repairing invalid structured queries with schema/error context.
+- Response suppression logic should rely on contextual detection, not standalone numeric patterns.
+- Metadata scanning should avoid broad dictionary stringification to reduce accidental matches.
 
-### 13.3 Reflection Prompting
+## 14. Configuration Requirements
 
-- Binary completeness assessment with concise explanation.
+The system should be configurable for:
 
-### 13.4 Final Semantic Answer Prompting
-
-- Summarize strongest evidence into concise response.
-- Address user question directly.
-- Enforce citation line format.
-
-## 14. Configuration Model
-
-The system should be fully driven by environment configuration for:
-
-- database connectivity,
-- vector database connectivity,
-- LLM model and embedding model,
-- similarity threshold,
-- performance knobs (such as parallel overlap checks),
-- default upload collection names,
-- reserved few-shot collection names,
-- optional reranker configuration.
+- Relational service connectivity.
+- Vector service connectivity.
+- Model selection for generation and embeddings.
+- Similarity thresholds.
+- Reranking model configuration.
+- Parallelism and retry limits.
+- Reserved collection names.
 
 ## 15. Operational Characteristics
 
 ### 15.1 Performance
 
-- Cache expensive planning context (schema and few-shot examples).
-- Use fast-path routing when intent is clearly semantic.
-- Enable selective parallelism only when workload justifies overhead.
+- Cache expensive planning context where safe.
+- Use fast-path routing when schema overlap is clearly absent.
+- Limit parallelism to workloads where overhead is justified.
 
 ### 15.2 Reliability
 
-- Graceful fallback behavior for reranker/LLM failures.
-- Deterministic fallback routes when planning output is invalid.
-- Defensive handling for missing collection selection.
+- Apply graceful fallback behavior for external model and reranking failures.
+- Ensure deterministic behavior under partial dependency failure.
+- Minimize user-visible internal errors.
 
 ### 15.3 Observability
 
-- Log route decisions, validation outcomes, and fallback events.
-- Track retrieval confidence metrics for troubleshooting.
+- Log route decisions and fallback reasons.
+- Log validation status and retrieval confidence markers.
+- Track session-level continuity indicators for debugging.
 
 ## 16. Sequence Diagram
 
@@ -271,46 +265,116 @@ The system should be fully driven by environment configuration for:
 sequenceDiagram
   participant User
   participant UI
-  participant Orchestrator
+  participant Engine
   participant Planner
   participant Executor
   participant SQL
   participant Vector
-  participant LLM
+  participant Model
 
-  User->>UI: Ask question
-  UI->>Orchestrator: Submit request
-  Orchestrator->>Planner: Plan routes
-  Planner->>LLM: Reason over intent
-  Planner-->>Orchestrator: Route plan
+  User->>UI: Submit question
+  UI->>Engine: Send request with session thread identity
+  Engine->>Planner: Generate route plan
+  Planner->>Model: Reason over intent
+  Planner-->>Engine: Route plan
 
-  Orchestrator->>Executor: Execute routes
+  Engine->>Executor: Execute sub-questions
   alt Structured route
-    Executor->>SQL: Query structured data
+    Executor->>SQL: Execute validated query
   else Semantic route
-    Executor->>Vector: Retrieve semantic chunks
+    Executor->>Vector: Retrieve candidate evidence
   end
 
-  Executor->>LLM: Optional rerank/summarize context
-  Executor-->>Orchestrator: Evidence package
+  Executor->>Model: Optional reranking and synthesis support
+  Executor-->>Engine: Ranked evidence
 
-  Orchestrator->>LLM: Reflect on completeness
-  LLM-->>Orchestrator: Complete or refine
+  Engine->>Model: Reflection check
+  Model-->>Engine: Complete or refine
 
-  Orchestrator-->>UI: Final cited answer
-  UI-->>User: Concise response + source/page
+  Engine-->>UI: Final summarized answer + citation
+  UI-->>User: Render response
 ```
 
-## 17. Pre-Implementation Safeguard Requirements
+## 17. Risks and Mitigations
 
-### 17.1 Sensitive Identifier Protection Policy
+### 17.1 Retrieval-Route Mismatch
 
-- If a user requests a specific person's social security number, the system must not provide that data.
-- In that case, the user-facing response must be exactly:
-  I am unable to provide that information based on company policy
+Risk:
 
-### 17.2 Prompt Input Restriction for Sensitive Identifiers
+- Planner routes to an incorrect retrieval mode.
 
-- Inputs containing social security numbers must be blocked from prompt processing.
-- Inputs explicitly requesting social security numbers must also be blocked from prompt processing.
-- When blocked, the system must return the same policy response defined above and must not continue with normal retrieval or answer-generation flow.
+Mitigations:
+
+- Schema-overlap heuristics.
+- Route validation safeguards.
+- Deterministic fallback policy.
+
+### 17.2 Follow-Up Context Drift
+
+Risk:
+
+- Follow-up questions lose conversational context.
+
+Mitigations:
+
+- Persistent checkpoint memory keyed by stable session thread identity.
+- Explicit reset workflow to bound session lifetime.
+
+### 17.3 Low-Confidence Semantic Responses
+
+Risk:
+
+- Irrelevant chunks produce incorrect answers.
+
+Mitigations:
+
+- Similarity thresholding.
+- Reranking.
+- Reflection and bounded refinement.
+
+### 17.4 Sensitive Data Leakage
+
+Risk:
+
+- Sensitive identifiers appear in prompt or response.
+
+Mitigations:
+
+- Prompt blocking.
+- Response suppression checks.
+- Fixed policy response.
+
+## 18. Delivery Plan (Pre-Implementation)
+
+### Phase 1: Core Retrieval Foundation
+
+- Implement relational retrieval with schema validation.
+- Implement vector retrieval with similarity scoring.
+- Define reserved and user-facing collection strategy.
+
+### Phase 2: Orchestration and Quality Controls
+
+- Implement route planning and decomposition.
+- Add reranking and threshold validation.
+- Add reflection-driven refinement loop.
+
+### Phase 3: Session and Safety Controls
+
+- Implement conversation checkpointing and session identity control.
+- Implement reset behavior and session state management.
+- Implement sensitive identifier safeguards.
+
+### Phase 4: UX Hardening and Observability
+
+- Finalize upload and query user workflows.
+- Improve source/page citation consistency.
+- Add operational logging for routing and fallback analysis.
+
+## 19. Acceptance Criteria
+
+1. Follow-up queries in the same session maintain context continuity.
+2. Invalid structured requests do not produce user-visible schema errors.
+3. Semantic answers below threshold are suppressed with safe fallback behavior.
+4. Final answers are concise and include source citation when evidence exists.
+5. Sensitive identifier policy is enforced at prompt and response stages.
+6. Reset session action reliably starts a new conversation thread.
