@@ -180,8 +180,7 @@ flowchart TD
 
 ### 11.1 Supported Content Types
 
-- PDF (text-focused).
-- PDF (multi-modal content including images).
+- PDF (text and multi-modal content including images).
 - DOCX (structured and unstructured extraction options).
 
 ### 11.2 Ingestion Pipeline
@@ -301,3 +300,17 @@ sequenceDiagram
   Orchestrator-->>UI: Final cited answer
   UI-->>User: Concise response + source/page
 ```
+
+## 17. Pre-Implementation Safeguard Requirements
+
+### 17.1 Sensitive Identifier Protection Policy
+
+- If a user requests a specific person's social security number, the system must not provide that data.
+- In that case, the user-facing response must be exactly:
+  I am unable to provide that information based on company policy
+
+### 17.2 Prompt Input Restriction for Sensitive Identifiers
+
+- Inputs containing social security numbers must be blocked from prompt processing.
+- Inputs explicitly requesting social security numbers must also be blocked from prompt processing.
+- When blocked, the system must return the same policy response defined above and must not continue with normal retrieval or answer-generation flow.

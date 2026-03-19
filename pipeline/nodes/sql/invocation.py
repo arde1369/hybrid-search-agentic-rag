@@ -11,6 +11,47 @@ def get_tool_by_name(pipeline, tool_name):
     return None
 
 
+def _resolve_vector_tool_name(pipeline):
+    for tool in pipeline.dao_tools:
+        current_name = getattr(tool, "name", None) or getattr(tool, "__name__", str(tool))
+        if current_name not in {"select", "get_full_schema", "get_full_schema_json"}:
+            return current_name
+    return "chroma_db_retriever"
+
+
+def _invoke_vector_fallback(pipeline, route, reason_message):
+    vector_tool_name = _resolve_vector_tool_name(pipeline)
+    sub_query = str(route.get("sub_query", "") or "").strip()
+    current_input = route.get("tool_input", {}) if isinstance(route.get("tool_input"), dict) else {}
+    collection_name = str(current_input.get("collection_name", "") or "").strip()
+    if not collection_name:
+        collection_name = resolve_vector_collection_name(pipeline, sub_query)
+
+    vector_input = {
+        "query": sub_query,
+        "collection_name": collection_name,
+    }
+
+    route["route"] = "vector"
+    route["tool_name"] = vector_tool_name
+    route["tool_input"] = vector_input
+    route["reason"] = f"Routed to vector fallback: {reason_message}"
+    route["safeguard_applied"] = "runtime_invalid_sql_to_vector"
+
+    tool = get_tool_by_name(pipeline, vector_tool_name)
+    if tool is None:
+        raise ValueError("Vector fallback tool was not found.")
+
+    print(
+        "[INVOCATION] SQL route switched to vector fallback due to schema mismatch: "
+        f"{reason_message}"
+    )
+
+    if hasattr(tool, "invoke"):
+        return tool.invoke(vector_input)
+    return tool(**vector_input)
+
+
 def invoke_tool(pipeline, route):
     tool_name = route.get("tool_name")
     tool_input = route.get("tool_input", {})
@@ -31,7 +72,7 @@ def invoke_tool(pipeline, route):
     if route.get("route") == "sql":
         status = str(route.get("validation_status", ""))
         if status.startswith("blocked_invalid_sql") or status.startswith("regeneration_error"):
-            raise ValueError(f"Blocked invalid SQL before execution: {status}")
+            return _invoke_vector_fallback(pipeline, route, status)
 
         if isinstance(tool_input, dict) and isinstance(tool_input.get("query"), str):
             live_schema = pipeline.sql_dao.get_full_schema()
@@ -50,9 +91,9 @@ def invoke_tool(pipeline, route):
                         tool_input["query"] = repaired_sql
                         route["tool_input"] = tool_input
                     else:
-                        raise ValueError(f"Blocked invalid SQL before execution: {repaired_error}")
+                        return _invoke_vector_fallback(pipeline, route, repaired_error)
                 else:
-                    raise ValueError(f"Blocked invalid SQL before execution: {validation_error}")
+                    return _invoke_vector_fallback(pipeline, route, validation_error)
 
     tool = get_tool_by_name(pipeline, tool_name)
     if tool is None:
@@ -75,10 +116,22 @@ def invoke_tool(pipeline, route):
                     error_message=str(invoke_error),
                 )
                 if repaired_sql:
+                    live_schema = pipeline.sql_dao.get_full_schema()
+                    is_repaired_valid, repaired_error = validate_sql_schema_alignment(repaired_sql, live_schema)
+                    if not is_repaired_valid:
+                        return _invoke_vector_fallback(pipeline, route, repaired_error)
+
                     repaired_input = dict(tool_input)
                     repaired_input["query"] = repaired_sql
                     route["tool_input"] = repaired_input
-                    return tool.invoke(repaired_input)
+                    try:
+                        return tool.invoke(repaired_input)
+                    except Exception as second_error:
+                        if is_schema_resolution_error(str(second_error)):
+                            return _invoke_vector_fallback(pipeline, route, str(second_error))
+                        raise
+
+                return _invoke_vector_fallback(pipeline, route, str(invoke_error))
 
             if tool_name == "select":
                 raise

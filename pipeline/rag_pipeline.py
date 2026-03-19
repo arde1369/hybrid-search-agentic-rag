@@ -1,14 +1,15 @@
 import os
 import json
-import uuid
 
 from dao.sql.sql_dao import SQLDAO
 from dao.vector.chroma_db import ChromaDB
 from langgraph.graph import StateGraph, END, START
 from langchain_ollama import OllamaLLM
 from chromadb.utils import embedding_functions
+from langchain_core.messages import HumanMessage
 from state.rag_reflection_state import RAGReflectionState
 from utilities.reranker import Reranker
+from utilities.safety import POLICY_BLOCK_MESSAGE, should_block_ssn_prompt_input
 from langgraph.checkpoint.memory import MemorySaver
 from pipeline.nodes import (
     executor_node as run_executor_node,
@@ -56,6 +57,8 @@ class Pipeline:
         )
         self.reranker = Reranker(self.llm_agent)
         self.dao_tools = [self.vector_db.as_retriever_tool(), *self.sql_dao.get_sql_tools()]
+        self._memory = MemorySaver()
+        self._graph = None
 
     def router_node(self, state : RAGReflectionState) -> RAGReflectionState:
         return run_router_node(self, state)
@@ -84,10 +87,11 @@ class Pipeline:
         
         REQUIREMENT: Maintains Few-Shot Learning integration throughout the graph.
         """
+        if self._graph is not None:
+            return self._graph
+
         print("Building RAG Pipeline graph...")
         workflow = StateGraph(RAGReflectionState)
-        # Create the memory saver and graph memory during the graph compilation
-        memory = MemorySaver()
         
         workflow.add_node("router", self.router_node)
         workflow.add_node("executor", self.executor_node)
@@ -106,9 +110,30 @@ class Pipeline:
             }
         )
         
-        return workflow.compile(checkpointer=memory)
+        self._graph = workflow.compile(checkpointer=self._memory)
+        return self._graph
 
-    def run_graph(self, question: str, collection_name: str = ""):
+    @staticmethod
+    def _build_policy_block_state(question: str, reason_code: str) -> RAGReflectionState:
+        return {
+            "question": question,
+            "collection_name": "",
+            "retrieved_docs": [],
+            "answer": {
+                "query": question,
+                "results": [],
+                "policy_message": POLICY_BLOCK_MESSAGE,
+                "policy_blocked": True,
+                "policy_reason": reason_code,
+            },
+            "reflection": "",
+            "revised": False,
+            "attempts": 0,
+            "routes": [],
+            "messages": [HumanMessage(content=question)],
+        }
+
+    def run_graph(self, question: str, collection_name: str = "", thread_id: str = ""):
         """
         Execute the compiled LangGraph with an input question.
         
@@ -118,9 +143,15 @@ class Pipeline:
         Returns:
             Final state containing the answer and reflection history
         """
+        question = str(question or "").strip()
         print(f"Running RAG Pipeline for question: {question}")
 
-        config={"configurable":{"thread_id":str(uuid.uuid4().int)}}
+        if should_block_ssn_prompt_input(question):
+            print("[SAFETY] Blocked prompt input due to SSN policy.")
+            return self._build_policy_block_state(question, reason_code="ssn_prompt_input_blocked")
+
+        resolved_thread_id = str(thread_id or "default_thread").strip()
+        config = {"configurable": {"thread_id": resolved_thread_id}}
 
         graph = self.build_graph()
         
@@ -133,7 +164,7 @@ class Pipeline:
             "revised": False,
             "attempts": 0,
             "routes": [],
-            "messages": [],
+            "messages": [HumanMessage(content=question)],
         }
         
         final_state = graph.invoke(initial_state, config=config)

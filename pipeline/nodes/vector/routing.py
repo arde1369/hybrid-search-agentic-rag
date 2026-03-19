@@ -82,8 +82,8 @@ def resolve_vector_collection_name(pipeline, query: str) -> str:
             names.append(getattr(collection, "name", str(collection)))
 
     reserved_collections = {
-        os.getenv("chroma_db_collection_golden_sql", "golden_sql"),
-        os.getenv("chroma_db_collection_cot_reasoning", "cot_reasoning"),
+        os.getenv("chroma_db_collection_golden_sql", "golden_sql_collection"),
+        os.getenv("chroma_db_collection_cot_reasoning", "cot_reasoning_collection"),
     }
     candidate_names = sorted({name for name in names if name and name not in reserved_collections})
     if not candidate_names:

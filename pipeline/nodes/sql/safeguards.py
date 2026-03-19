@@ -121,3 +121,57 @@ def apply_sql_no_result_safeguard(state, routes, vector_tool_name, schema_terms)
         )
 
     return updated_routes
+
+
+def reroute_blocked_sql_routes_to_vector(routes, vector_tool_name, collection_name):
+    if not isinstance(routes, list):
+        return routes
+
+    clean_collection_name = str(collection_name or "").strip()
+    updated_routes = []
+    rerouted_count = 0
+
+    for route in routes:
+        if not isinstance(route, dict):
+            updated_routes.append(route)
+            continue
+
+        is_sql_route = str(route.get("route", "") or "").strip().lower() == "sql"
+        validation_status = str(route.get("validation_status", "") or "")
+        should_reroute = (
+            is_sql_route
+            and (
+                validation_status.startswith("blocked_invalid_sql")
+                or validation_status.startswith("regeneration_error")
+            )
+        )
+
+        if not should_reroute:
+            updated_routes.append(route)
+            continue
+
+        sub_query = str(route.get("sub_query", "") or "").strip()
+        rerouted_count += 1
+        updated_routes.append(
+            {
+                **route,
+                "route": "vector",
+                "tool_name": vector_tool_name,
+                "tool_input": {
+                    "query": sub_query,
+                    "collection_name": clean_collection_name,
+                },
+                "reason": (
+                    "Switched to vector retrieval because generated SQL failed live schema validation."
+                ),
+                "safeguard_applied": "invalid_sql_to_vector",
+            }
+        )
+
+    if rerouted_count:
+        print(
+            "[ROUTER SAFEGUARD] Switched "
+            f"{rerouted_count} SQL route(s) to vector due to schema validation failure."
+        )
+
+    return updated_routes

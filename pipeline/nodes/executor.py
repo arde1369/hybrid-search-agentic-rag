@@ -4,6 +4,11 @@ from langchain_classic.schema import Document
 
 from pipeline.nodes.sql import invoke_tool
 from pipeline.nodes.vector import validate_vector_route_documents
+from utilities.safety import (
+    POLICY_BLOCK_MESSAGE,
+    answer_results_contain_ssn,
+    references_ssn,
+)
 
 
 def _to_documents(output, route):
@@ -99,6 +104,20 @@ def executor_node(pipeline, state):
             }
         )
         reranked_documents.extend(ranked_documents)
+
+    should_apply_ssn_policy = references_ssn(question) or answer_results_contain_ssn(compiled_results)
+    if should_apply_ssn_policy:
+        print("[SAFETY] Suppressing response due to SSN policy.")
+        state["retrieved_docs"] = []
+        state["answer"] = {
+            "query": question,
+            "results": [],
+            "policy_message": POLICY_BLOCK_MESSAGE,
+            "policy_blocked": True,
+            "policy_reason": "ssn_response_suppressed",
+        }
+        print(f"Executor node completed. State: {json.dumps(state, default=str, indent=2)}")
+        return state
 
     state["retrieved_docs"] = reranked_documents
     state["answer"] = {

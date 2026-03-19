@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 
 from docx_processing.docx_processor import DocxProcessor
 from pdf_processing.multi_modal_processor import MultiModalPDFProcessor
-from pdf_processing.pdf_processor_text import TextProcessor
 
 
 def list_collection_names(pipeline) -> List[str]:
@@ -28,7 +27,7 @@ def ensure_collection(pipeline, collection_name: str) -> str:
 
 
 def infer_expected_extension(upload_mode: str) -> str:
-    if upload_mode in {"PDF with images", "PDF with text ONLY"}:
+    if str(upload_mode or "").strip().upper().startswith("PDF"):
         return ".pdf"
     return ".docx"
 
@@ -140,30 +139,16 @@ def process_and_store_upload(
     source_file: str,
     collection_name: Optional[str] = None,
 ) -> Dict[str, Any]:
+    is_pdf_upload = str(upload_mode or "").strip().upper().startswith("PDF")
+
     resolved_collection_name = collection_name or (
         _multimodal_collection_name()
-        if upload_mode == "PDF with images"
+        if is_pdf_upload
         else _text_collection_name()
     )
     resolved_collection_name = ensure_collection(pipeline, resolved_collection_name)
 
-    if upload_mode == "PDF with text ONLY":
-        processor = TextProcessor()
-        chunks = processor._process_pdf(temp_file_path)
-        stored_count = _store_text_documents(
-            pipeline,
-            chunks,
-            source_file,
-            upload_mode,
-            resolved_collection_name,
-        )
-        return {
-            "processed_count": len(chunks),
-            "stored_count": stored_count,
-            "collection_name": resolved_collection_name,
-        }
-
-    if upload_mode == "PDF with images":
+    if is_pdf_upload:
         processor = MultiModalPDFProcessor()
         processor._process_pdf(temp_file_path)
         stored_count = _store_multimodal_documents(

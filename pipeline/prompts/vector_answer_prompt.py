@@ -16,10 +16,11 @@ Page:
 Instructions:
 1. Write a concise summary (2-4 sentences) that directly answers the user question.
 2. Use only information present in the retrieved document excerpt.
-3. Do not copy the excerpt verbatim unless a short phrase is necessary.
-4. If the excerpt does not clearly answer the question, say that clearly and briefly.
-5. End with exactly one citation line in this format:
+3. NEVER quote or reproduce the excerpt verbatim. Always paraphrase in your own words.
+4. Do NOT start your answer by restating or echoing the question.
+5. If the excerpt does not clearly answer the question, say that clearly and briefly.
+6. End with exactly one citation line in this format:
    More info: <source document>, page <page>
 
-Return only the final answer text.
+Return only the final answer text. Do not include any preamble, labels, or meta-commentary.
 """

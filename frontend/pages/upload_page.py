@@ -11,8 +11,7 @@ from frontend.services.upload_service import (
 
 
 UPLOAD_OPTIONS = [
-    "PDF with images",
-    "PDF with text ONLY",
+    "PDF",
     "Structured DOCX",
     "Unstructured DOCX",
 ]

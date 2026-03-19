@@ -25,7 +25,7 @@ services:
     volumes:
       - ollama_models:/root/.ollama
       - ./zscaler-root.cer:/usr/local/share/ca-certificates/zscaler-root.crt:ro
-    entrypoint: ["/bin/sh", "-c", "update-ca-certificates && ollama serve & sleep 5 && ollama pull mistral && ollama pull nomic-embed-text && tail -f /dev/null"]
+    entrypoint: ["/bin/sh", "-c", "update-ca-certificates && ollama serve & sleep 5 && ollama pull llama3.1:8b && ollama pull nomic-embed-text && tail -f /dev/null"]
 
   chromadb:
     image: ghcr.io/chroma-core/chroma:latest
@@ -65,7 +65,7 @@ services:
       # Ollama Configuration (lowercase - as expected by Pipeline)
       - ollama_host=ollama
       - ollama_port=11434
-      - ollama_model_name=mistral
+      - ollama_model_name=llama3.1:8b
       - ollama_embedding_model_name=nomic-embed-text
       
       # Cohere Reranker Configuration (uppercase - as per cohere SDK)

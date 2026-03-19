@@ -5,7 +5,7 @@ from .generation import (
     repair_sql_query_with_schema,
 )
 from .invocation import get_tool_by_name, invoke_tool
-from .safeguards import apply_sql_no_result_safeguard, build_schema_terms
+from .safeguards import apply_sql_no_result_safeguard, build_schema_terms, reroute_blocked_sql_routes_to_vector
 from .validation import (
     is_schema_resolution_error,
     validate_and_refine_routes,
@@ -21,6 +21,7 @@ __all__ = [
     "invoke_tool",
     "apply_sql_no_result_safeguard",
     "build_schema_terms",
+    "reroute_blocked_sql_routes_to_vector",
     "is_schema_resolution_error",
     "validate_and_refine_routes",
     "validate_sql_schema_alignment",

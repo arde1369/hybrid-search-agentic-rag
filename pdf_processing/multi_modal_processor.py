@@ -61,7 +61,10 @@ class MultiModalPDFProcessor(MultiModalParent):
             for i, page in enumerate(doc):
                 text = page.get_text()
                 if text.strip():
-                    temp_doc = Document(page_content=text, metadata={"page": i, "type": "text"})
+                    temp_doc = Document(
+                        page_content=text,
+                        metadata={"page": i + 1, "page_index": i, "type": "text"},
+                    )
                     text_chunks = splitter.split_documents([temp_doc])
                     for chunk in text_chunks:
                         embedding = self.embed_text(chunk.page_content)
@@ -87,7 +90,7 @@ class MultiModalPDFProcessor(MultiModalParent):
 
                         image_doc = Document(
                             page_content=f"[Image: {image_id}]",
-                            metadata={"page": i, "type": "image", "image_id": image_id},
+                            metadata={"page": i + 1, "page_index": i, "type": "image", "image_id": image_id},
                         )
                         self.all_documents.append(image_doc)
                     except Exception as e:

@@ -10,43 +10,172 @@ def is_schema_resolution_error(error_message: str) -> bool:
     return any(fragment in lowered for fragment in error_fragment_list)
 
 
+_SQL_RESERVED_WORDS = {
+    "select", "from", "join", "left", "right", "inner", "outer", "full", "cross", "on", "where",
+    "group", "by", "order", "having", "limit", "offset", "union", "all", "distinct", "as",
+    "and", "or", "not", "in", "is", "null", "like", "between", "exists", "case", "when", "then",
+    "else", "end", "asc", "desc", "true", "false"
+}
+
+
+def _strip_sql_literals(sql_query: str) -> str:
+    # Remove quoted strings so token checks don't treat literal content as identifiers.
+    stripped = re.sub(r"'[^']*'", "''", str(sql_query or ""))
+    stripped = re.sub(r'"[^"]*"', '""', stripped)
+    stripped = re.sub(r"`([^`]*)`", r"\1", stripped)
+    return stripped
+
+
+def _extract_table_aliases(sql_query: str):
+    table_aliases = {}
+    cleaned = _strip_sql_literals(sql_query)
+    pattern = re.compile(
+        r"\b(?:FROM|JOIN)\s+([a-zA-Z_][\w]*)(?:\s+(?:AS\s+)?([a-zA-Z_][\w]*))?",
+        flags=re.IGNORECASE,
+    )
+    for table_name, alias in pattern.findall(cleaned):
+        table_key = str(table_name or "").strip().lower()
+        if not table_key:
+            continue
+        table_aliases[table_key] = table_key
+        alias_key = str(alias or "").strip().lower()
+        if alias_key and alias_key not in _SQL_RESERVED_WORDS:
+            table_aliases[alias_key] = table_key
+    return table_aliases
+
+
+def _extract_unqualified_predicate_columns(sql_query: str):
+    cleaned = _strip_sql_literals(sql_query)
+    candidates = set()
+    pattern = re.compile(
+        r"(?<!\.)\b([a-zA-Z_][\w]*)\b\s*(?:=|<>|!=|<=|>=|<|>|LIKE\b|IN\b|IS\b|BETWEEN\b)",
+        flags=re.IGNORECASE,
+    )
+    for col in pattern.findall(cleaned):
+        lowered = str(col or "").strip().lower()
+        if lowered and lowered not in _SQL_RESERVED_WORDS:
+            candidates.add(lowered)
+    return candidates
+
+
+def _extract_group_order_columns(sql_query: str):
+    cleaned = _strip_sql_literals(sql_query)
+    candidates = set()
+
+    clause_patterns = [
+        re.compile(r"\bGROUP\s+BY\s+(.+?)(?:\bHAVING\b|\bORDER\s+BY\b|\bLIMIT\b|;|$)", re.IGNORECASE | re.DOTALL),
+        re.compile(r"\bORDER\s+BY\s+(.+?)(?:\bLIMIT\b|;|$)", re.IGNORECASE | re.DOTALL),
+    ]
+
+    for clause_pattern in clause_patterns:
+        for clause in clause_pattern.findall(cleaned):
+            parts = [segment.strip() for segment in str(clause or "").split(",") if segment.strip()]
+            for part in parts:
+                normalized = re.sub(r"\bASC\b|\bDESC\b", "", part, flags=re.IGNORECASE).strip()
+                # Skip function calls like COUNT(*), DATE(col), etc.
+                if "(" in normalized and ")" in normalized:
+                    continue
+
+                qualified_match = re.match(r"^([a-zA-Z_][\w]*)\.([a-zA-Z_][\w]*)$", normalized)
+                if qualified_match:
+                    candidates.add(f"{qualified_match.group(1).lower()}.{qualified_match.group(2).lower()}")
+                    continue
+
+                token_match = re.match(r"^([a-zA-Z_][\w]*)$", normalized)
+                if token_match:
+                    token = token_match.group(1).lower()
+                    if token not in _SQL_RESERVED_WORDS:
+                        candidates.add(token)
+
+    return candidates
+
+
 def validate_sql_schema_alignment(sql_query: str, schema: dict) -> tuple[bool, str]:
     if not sql_query or not schema:
         return False, "Empty query or schema"
 
     try:
-        valid_tables = {t.lower() for t in schema.get("tables", {}).keys()}
+        tables_dict = schema.get("tables", {}) if isinstance(schema.get("tables", {}), dict) else {}
+        valid_tables = {t.lower() for t in tables_dict.keys()}
         if not valid_tables:
             return False, "No tables found in schema"
 
-        from_pattern = r"FROM\s+([\w]+)(?:\s|;|WHERE|ORDER|GROUP|LIMIT|$)"
-        from_matches = re.findall(from_pattern, sql_query, re.IGNORECASE)
+        table_aliases = _extract_table_aliases(sql_query)
+        referenced_tables = {table_name for table_name in table_aliases.values()}
 
-        for table_ref in from_matches:
-            if table_ref.lower() not in valid_tables:
+        if not referenced_tables:
+            from_pattern = r"FROM\s+([\w]+)(?:\s|;|WHERE|ORDER|GROUP|LIMIT|$)"
+            from_matches = [match.lower() for match in re.findall(from_pattern, sql_query, re.IGNORECASE)]
+            referenced_tables = set(from_matches)
+
+        for table_ref in referenced_tables:
+            if table_ref not in valid_tables:
                 valid_table_list = ", ".join(sorted(valid_tables))
                 return False, f"Table '{table_ref}' does not exist in schema. Valid tables: {valid_table_list}"
 
-        where_pattern = r"WHERE\s+(.+?)(?:\s+(?:GROUP|ORDER|LIMIT|;)|$)"
-        where_matches = re.findall(where_pattern, sql_query, re.IGNORECASE | re.DOTALL)
+        table_columns = {}
+        all_referenced_columns = set()
+        for table_name in referenced_tables:
+            actual_table_name = next((name for name in tables_dict.keys() if str(name).lower() == table_name), None)
+            table_meta = tables_dict.get(actual_table_name) if actual_table_name else None
+            valid_columns = set()
+            if table_meta and isinstance(table_meta, dict):
+                for column in table_meta.get("columns", []):
+                    col_name = str(column.get("name", "") or "").strip().lower()
+                    if col_name:
+                        valid_columns.add(col_name)
+            table_columns[table_name] = valid_columns
+            all_referenced_columns.update(valid_columns)
 
-        if where_matches and from_matches:
-            table_ref = from_matches[0]
-            tables_dict = schema.get("tables", {})
-            table_name = next((t for t in tables_dict if t.lower() == table_ref.lower()), None)
-            table_meta = tables_dict.get(table_name) if table_name else None
+        qualified_refs = re.findall(r"\b([a-zA-Z_][\w]*)\.([a-zA-Z_][\w]*)\b", _strip_sql_literals(sql_query))
+        for alias_or_table, column_name in qualified_refs:
+            left = str(alias_or_table or "").strip().lower()
+            right = str(column_name or "").strip().lower()
 
-            if table_meta:
-                valid_columns = {c.get("name", "").lower() for c in table_meta.get("columns", [])}
+            resolved_table = table_aliases.get(left)
+            if not resolved_table:
+                if left in valid_tables:
+                    resolved_table = left
+                else:
+                    return False, f"Table or alias '{alias_or_table}' is not present in the live schema context."
 
-                for where_clause in where_matches:
-                    col_pattern = r"\b([a-zA-Z_][\w]*)\s*(?:=|<>|!=|<=|>=|<|>|LIKE|IN)"
-                    potential_cols = re.findall(col_pattern, where_clause, re.IGNORECASE)
+            valid_columns_for_table = table_columns.get(resolved_table, set())
+            if right not in valid_columns_for_table:
+                valid_col_list = ", ".join(sorted(valid_columns_for_table))
+                return (
+                    False,
+                    f"Column '{column_name}' does not exist in table '{resolved_table}'. "
+                    f"Valid columns: {valid_col_list}",
+                )
 
-                    for col in potential_cols:
-                        if col.lower() not in valid_columns and col.lower() not in ["and", "or", "not"]:
-                            valid_col_list = ", ".join(sorted(valid_columns))
-                            return False, f"Column '{col}' does not exist in table '{table_name}'. Valid columns: {valid_col_list}"
+        for unqualified_column in _extract_unqualified_predicate_columns(sql_query):
+            if unqualified_column not in all_referenced_columns:
+                valid_col_list = ", ".join(sorted(all_referenced_columns))
+                return (
+                    False,
+                    f"Column '{unqualified_column}' is not present in referenced table columns. "
+                    f"Valid columns: {valid_col_list}",
+                )
+
+        for group_or_order_column in _extract_group_order_columns(sql_query):
+            if "." in group_or_order_column:
+                alias_or_table, column = group_or_order_column.split(".", 1)
+                resolved_table = table_aliases.get(alias_or_table, alias_or_table)
+                valid_columns_for_table = table_columns.get(resolved_table, set())
+                if column not in valid_columns_for_table:
+                    valid_col_list = ", ".join(sorted(valid_columns_for_table))
+                    return (
+                        False,
+                        f"Column '{column}' does not exist in table '{resolved_table}' for GROUP/ORDER BY. "
+                        f"Valid columns: {valid_col_list}",
+                    )
+            elif group_or_order_column not in all_referenced_columns:
+                valid_col_list = ", ".join(sorted(all_referenced_columns))
+                return (
+                    False,
+                    f"Column '{group_or_order_column}' is not present in referenced table columns for GROUP/ORDER BY. "
+                    f"Valid columns: {valid_col_list}",
+                )
 
         return True, ""
     except Exception as e:

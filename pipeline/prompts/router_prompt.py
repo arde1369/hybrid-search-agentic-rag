@@ -29,6 +29,7 @@ def build_router_prompt(
                     3) Use the vector retriever tool for policies, unstructured documents, semantic lookup, or broad natural-language questions.
                     4) Never generate INSERT/UPDATE/DELETE/ALTER/DROP/TRUNCATE SQL.
                     5) For SQL routes, use only table and column names that exist in the provided live schema.
+                    6) Never attempt to retrieve or provide social security numbers (SSN); these requests must be denied by policy.
 
                     Decomposition policy:
                     1) If the user asks multiple things, split into multiple sub-queries.

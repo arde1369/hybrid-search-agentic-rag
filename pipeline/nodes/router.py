@@ -8,6 +8,7 @@ from pipeline.nodes.sql import (
     apply_sql_no_result_safeguard,
     build_schema_terms,
     enrich_sql_routes_with_live_schema,
+    reroute_blocked_sql_routes_to_vector,
     validate_and_refine_routes,
 )
 from pipeline.nodes.vector import (
@@ -59,7 +60,7 @@ def _get_cached_schema_context(pipeline):
 
 def _retrieve_golden_sql_examples(pipeline, n_examples=3):
     try:
-        collection_name = os.getenv("chroma_db_collection_golden_sql", "golden_sql")
+        collection_name = os.getenv("chroma_db_collection_golden_sql", "golden_sql_collection")
         collection = pipeline.vector_db._get_collection_internal(collection_name)
         query_embeddings = pipeline.embedding_function(["SELECT query examples"])
         examples = collection.query(query_embeddings=query_embeddings, n_results=n_examples)
@@ -70,7 +71,7 @@ def _retrieve_golden_sql_examples(pipeline, n_examples=3):
 
 def _retrieve_golden_reasoning_examples(pipeline, n_examples=2):
     try:
-        collection_name = os.getenv("chroma_db_collection_cot_reasoning", "cot_reasoning")
+        collection_name = os.getenv("chroma_db_collection_cot_reasoning", "cot_reasoning_collection")
         collection = pipeline.vector_db._get_collection_internal(collection_name)
         query_embeddings = pipeline.embedding_function(["multi-step reasoning examples"])
         examples = collection.query(query_embeddings=query_embeddings, n_results=n_examples)
@@ -273,6 +274,7 @@ def router_node(pipeline, state):
             routes = enrich_sql_routes_with_live_schema(pipeline, normalized)
             if schema:
                 routes = validate_and_refine_routes(pipeline, routes, schema)
+            routes = reroute_blocked_sql_routes_to_vector(routes, vector_tool_name, selected_collection)
             routes = apply_sql_no_result_safeguard(state, routes, vector_tool_name, schema_terms)
             routes = inject_collection_into_vector_routes(routes, selected_collection)
             state["routes"] = routes
@@ -288,6 +290,7 @@ def router_node(pipeline, state):
                     routes = enrich_sql_routes_with_live_schema(pipeline, normalized)
                     if schema:
                         routes = validate_and_refine_routes(pipeline, routes, schema)
+                    routes = reroute_blocked_sql_routes_to_vector(routes, vector_tool_name, selected_collection)
                     routes = apply_sql_no_result_safeguard(state, routes, vector_tool_name, schema_terms)
                     routes = inject_collection_into_vector_routes(routes, selected_collection)
                     state["routes"] = routes
@@ -306,6 +309,7 @@ def router_node(pipeline, state):
     routes = _canonicalize_routes(routes)
     if schema:
         routes = validate_and_refine_routes(pipeline, routes, schema)
+    routes = reroute_blocked_sql_routes_to_vector(routes, vector_tool_name, selected_collection)
     routes = apply_sql_no_result_safeguard(state, routes, vector_tool_name, schema_terms)
     routes = inject_collection_into_vector_routes(routes, selected_collection)
 

@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict, List
 
 
-GOLDEN_SQL_COLLECTION = os.getenv("chroma_db_collection_golden_sql", "golden_sql")
+GOLDEN_SQL_COLLECTION = os.getenv("chroma_db_collection_golden_sql", "golden_sql_collection")
 
 
 def extract_sql_feedback_entries(final_state: Dict[str, Any]) -> List[Dict[str, str]]:

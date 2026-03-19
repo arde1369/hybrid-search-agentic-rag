@@ -64,6 +64,10 @@ def extract_answer_text(final_state) -> str:
         reflection = final_state.get("reflection", reflection)
 
     if isinstance(answer, dict):
+        policy_message = str(answer.get("policy_message", "") or "").strip()
+        if policy_message:
+            return policy_message
+
         results = answer.get("results", [])
         if results:
             lines = []

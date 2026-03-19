@@ -3,6 +3,7 @@ import os
 import uuid
 from langchain.tools import tool
 import chromadb
+from chromadb.errors import InvalidArgumentError
 from dotenv import load_dotenv
 from langchain_classic.schema import Document
 from pipeline.nodes.vector.answer_validation import distance_to_similarity
@@ -16,7 +17,59 @@ class ChromaDB:
         self.port = int(os.getenv('chroma_db_port'))
         self.client = chromadb.HttpClient(host=self.host, port=self.port)
         self.embedding_func = embedding_func
+        self._multimodal_processor = None
         self.retriever = None
+
+    def _is_probably_multimodal_collection(self, collection_name: str) -> bool:
+        name = str(collection_name or "").strip().lower()
+        return "multimodal" in name or "multi_modal" in name
+
+    def _get_multimodal_processor(self):
+        if self._multimodal_processor is None:
+            from pdf_processing.multi_modal_processor import MultiModalPDFProcessor
+
+            self._multimodal_processor = MultiModalPDFProcessor()
+        return self._multimodal_processor
+
+    def _embed_query_text(self, query_text: str, use_multimodal: bool = False):
+        if use_multimodal:
+            processor = self._get_multimodal_processor()
+            embedding = processor.embed_text(query_text)
+            return [embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)]
+        return self.embedding_func([query_text])
+
+    def _embed_query_texts(self, query_texts, use_multimodal: bool = False):
+        payload = [str(item or "") for item in (query_texts or [])]
+        if not payload:
+            payload = [""]
+        if use_multimodal:
+            processor = self._get_multimodal_processor()
+            embeddings = []
+            for query_text in payload:
+                embedding = processor.embed_text(query_text)
+                embeddings.append(embedding.tolist() if hasattr(embedding, "tolist") else list(embedding))
+            return embeddings
+        return self.embedding_func(payload)
+
+    def _query_collection_with_fallback(self, collection, query_text: str, n_results: int):
+        collection_name = getattr(collection, "name", "")
+        if self._is_probably_multimodal_collection(collection_name):
+            query_embeddings = self._embed_query_text(query_text, use_multimodal=True)
+            return collection.query(query_embeddings=query_embeddings, n_results=n_results)
+
+        try:
+            query_embeddings = self._embed_query_text(query_text, use_multimodal=False)
+            return collection.query(query_embeddings=query_embeddings, n_results=n_results)
+        except InvalidArgumentError as ex:
+            error_message = str(ex)
+            if "dimension" not in error_message.lower():
+                raise
+            print(
+                "[VECTOR RETRIEVER] Embedding dimension mismatch detected. "
+                "Retrying with CLIP text embeddings for multimodal collection."
+            )
+            query_embeddings = self._embed_query_text(query_text, use_multimodal=True)
+            return collection.query(query_embeddings=query_embeddings, n_results=n_results)
 
     def _get_collection_internal(self, name):
         """Internal method to retrieve or create a collection (not exposed as tool)."""
@@ -35,8 +88,23 @@ class ChromaDB:
         """
         collection = self._get_collection_internal(collection_name)
         query_payload = query_texts if isinstance(query_texts, list) else [query_texts]
-        query_embeddings = self.embedding_func(query_payload)
-        results = collection.query(query_embeddings=query_embeddings, n_results=n_results)
+        if self._is_probably_multimodal_collection(collection_name):
+            query_embeddings = self._embed_query_texts(query_payload, use_multimodal=True)
+            return collection.query(query_embeddings=query_embeddings, n_results=n_results)
+
+        try:
+            query_embeddings = self._embed_query_texts(query_payload, use_multimodal=False)
+            results = collection.query(query_embeddings=query_embeddings, n_results=n_results)
+        except InvalidArgumentError as ex:
+            error_message = str(ex)
+            if "dimension" not in error_message.lower():
+                raise
+            print(
+                "[VECTOR RETRIEVER] Embedding dimension mismatch detected. "
+                "Retrying with CLIP text embeddings for multimodal collection."
+            )
+            query_embeddings = self._embed_query_texts(query_payload, use_multimodal=True)
+            results = collection.query(query_embeddings=query_embeddings, n_results=n_results)
         return results
     
     @tool
@@ -45,8 +113,7 @@ class ChromaDB:
         Similar to similarity_search but also returns similarity scores.
         """
         collection = self._get_collection_internal(collection_name)
-        query_embeddings = self.embedding_func([query])
-        results = collection.query(query_embeddings=query_embeddings, n_results=n_results)
+        results = self._query_collection_with_fallback(collection, str(query or ""), n_results)
 
         distances = results.get("distances", [[]])
         distance_list = distances[0] if distances and isinstance(distances[0], list) else []
@@ -126,8 +193,7 @@ class ChromaDB:
             )
 
             collection = self._get_collection_internal(selected_collection)
-            query_embeddings = self.embedding_func([query])
-            response = collection.query(query_embeddings=query_embeddings, n_results=n_results)
+            response = self._query_collection_with_fallback(collection, str(query or ""), n_results)
 
             documents = response.get("documents", [[]])
             metadatas = response.get("metadatas", [[]])
