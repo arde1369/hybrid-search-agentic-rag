@@ -85,6 +85,34 @@ def build_router_prompt(
                                 ]
                             }}
 
+                        - Query: "Show project and contract information for active engagements."
+                            Output:
+                            {{
+                                "routes": [
+                                    {{
+                                        "sub_query": "Show project and contract information for active engagements.",
+                                        "route": "sql",
+                                        "tool_name": "{sql_tool_name}",
+                                        "tool_input": {{"query": "SELECT p.project_id, p.project_name, c.contract_id, c.contract_type FROM projects p JOIN contracts c ON p.contract_id = c.contract_id WHERE p.status = 'Active';"}},
+                                        "reason": "Project and contract data is structured relational data in SQL tables."
+                                    }}
+                                ]
+                            }}
+
+                        - Query: "List employee locations, departments, and basic information."
+                            Output:
+                            {{
+                                "routes": [
+                                    {{
+                                        "sub_query": "List employee locations, departments, and basic information.",
+                                        "route": "sql",
+                                        "tool_name": "{sql_tool_name}",
+                                        "tool_input": {{"query": "SELECT firstname, lastname, location, department, email FROM employee;"}},
+                                        "reason": "Employee attributes like location and department are structured relational fields."
+                                    }}
+                                ]
+                            }}
+
                         Semantic routing examples:
                         - Query: "What is the maternity leave policy?"
                             Output:
@@ -110,6 +138,34 @@ def build_router_prompt(
                                         "tool_name": "{vector_tool_name}",
                                         "tool_input": {{"query": "Summarize the company holiday guidelines."}},
                                         "reason": "Broad natural-language semantic retrieval request."
+                                    }}
+                                ]
+                            }}
+
+                        - Query: "What are the company performance metrics?"
+                            Output:
+                            {{
+                                "routes": [
+                                    {{
+                                        "sub_query": "What are the company performance metrics?",
+                                        "route": "vector",
+                                        "tool_name": "{vector_tool_name}",
+                                        "tool_input": {{"query": "What are the company performance metrics?"}},
+                                        "reason": "Performance metric definitions and summaries are typically documented in unstructured reports."
+                                    }}
+                                ]
+                            }}
+
+                        - Query: "Give a company performance incentive breakdown."
+                            Output:
+                            {{
+                                "routes": [
+                                    {{
+                                        "sub_query": "Give a company performance incentive breakdown.",
+                                        "route": "vector",
+                                        "tool_name": "{vector_tool_name}",
+                                        "tool_input": {{"query": "Give a company performance incentive breakdown."}},
+                                        "reason": "Incentive breakdown explanations are best handled via semantic retrieval from policy/performance docs."
                                     }}
                                 ]
                             }}

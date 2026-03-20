@@ -1,5 +1,7 @@
 import json
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from pipeline.nodes.sql.generation import generate_sql_with_schema, repair_sql_query_with_schema
 
@@ -182,88 +184,116 @@ def validate_sql_schema_alignment(sql_query: str, schema: dict) -> tuple[bool, s
         return False, f"Error validating SQL: {str(e)}"
 
 
+def _refine_sql_route(pipeline, route: dict, schema: dict, schema_json: str) -> dict:
+    sql_query = route.get("tool_input", {}).get("query", "") if isinstance(route.get("tool_input"), dict) else ""
+    if not sql_query:
+        return route
+
+    route = dict(route)
+    is_valid, error_msg = validate_sql_schema_alignment(sql_query, schema)
+
+    if is_valid:
+        route["validation_status"] = "valid"
+        return route
+
+    candidate_sql = sql_query
+    validated_sql = ""
+    last_error = error_msg
+
+    try:
+        for _ in range(3):
+            regenerated_sql = generate_sql_with_schema(
+                pipeline,
+                sub_query=route.get("sub_query", ""),
+                schema_json=schema_json,
+                previous_sql=candidate_sql,
+            )
+            if regenerated_sql:
+                candidate_sql = regenerated_sql
+
+            is_candidate_valid, candidate_error = validate_sql_schema_alignment(candidate_sql, schema)
+            if is_candidate_valid:
+                validated_sql = candidate_sql
+                break
+
+            last_error = candidate_error
+            repaired_sql = repair_sql_query_with_schema(
+                pipeline,
+                sub_query=route.get("sub_query", ""),
+                broken_sql=candidate_sql,
+                error_message=candidate_error,
+            )
+            if repaired_sql:
+                candidate_sql = repaired_sql
+
+            is_candidate_valid, candidate_error = validate_sql_schema_alignment(candidate_sql, schema)
+            if is_candidate_valid:
+                validated_sql = candidate_sql
+                break
+
+            last_error = candidate_error
+
+        if validated_sql:
+            tool_input = dict(route.get("tool_input", {})) if isinstance(route.get("tool_input"), dict) else {}
+            tool_input["query"] = validated_sql
+            route["tool_input"] = tool_input
+            route["validation_status"] = "regenerated_and_valid"
+        else:
+            route["validation_status"] = f"blocked_invalid_sql: {last_error}"
+            route["tool_name"] = ""
+            route["tool_input"] = {}
+    except Exception as regen_error:
+        route["validation_status"] = f"regeneration_error: {str(regen_error)}"
+        route["tool_name"] = ""
+        route["tool_input"] = {}
+
+    return route
+
+
 def validate_and_refine_routes(pipeline, routes: list, schema: dict) -> list:
     if not schema or not isinstance(routes, list):
         return routes
 
-    refined_routes = []
-    for route in routes:
+    try:
+        schema_json = json.dumps(schema, indent=2)
+    except Exception:
+        schema_json = "{}"
+
+    refined_routes = [None] * len(routes)
+    sql_route_indexes = []
+
+    for index, route in enumerate(routes):
         if not isinstance(route, dict):
-            refined_routes.append(route)
+            refined_routes[index] = route
             continue
 
         if route.get("route") != "sql":
-            refined_routes.append(route)
+            refined_routes[index] = route
             continue
 
         sql_query = route.get("tool_input", {}).get("query", "") if isinstance(route.get("tool_input"), dict) else ""
-
         if not sql_query:
-            refined_routes.append(route)
+            refined_routes[index] = route
             continue
 
-        is_valid, error_msg = validate_sql_schema_alignment(sql_query, schema)
+        sql_route_indexes.append(index)
 
-        if is_valid:
-            route["validation_status"] = "valid"
-            refined_routes.append(route)
-            continue
+    configured_workers = os.getenv("concurrency_worker_count", "4")
+    try:
+        worker_count = max(1, int(configured_workers))
+    except ValueError:
+        worker_count = 4
 
-        candidate_sql = sql_query
-        validated_sql = ""
-        last_error = error_msg
+    worker_count = min(worker_count, len(sql_route_indexes)) if sql_route_indexes else 1
 
-        try:
-            schema_json = json.dumps(schema, indent=2)
-            for _ in range(3):
-                regenerated_sql = generate_sql_with_schema(
-                    pipeline,
-                    sub_query=route.get("sub_query", ""),
-                    schema_json=schema_json,
-                    previous_sql=candidate_sql,
-                )
-                if regenerated_sql:
-                    candidate_sql = regenerated_sql
+    # Refine SQL routes in parallel but block until all refinements complete.
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        future_by_index = {
+            index: executor.submit(_refine_sql_route, pipeline, routes[index], schema, schema_json)
+            for index in sql_route_indexes
+        }
 
-                is_candidate_valid, candidate_error = validate_sql_schema_alignment(candidate_sql, schema)
-                if is_candidate_valid:
-                    validated_sql = candidate_sql
-                    break
-
-                last_error = candidate_error
-                repaired_sql = repair_sql_query_with_schema(
-                    pipeline,
-                    sub_query=route.get("sub_query", ""),
-                    broken_sql=candidate_sql,
-                    error_message=candidate_error,
-                )
-                if repaired_sql:
-                    candidate_sql = repaired_sql
-
-                is_candidate_valid, candidate_error = validate_sql_schema_alignment(candidate_sql, schema)
-                if is_candidate_valid:
-                    validated_sql = candidate_sql
-                    break
-
-                last_error = candidate_error
-
-            if validated_sql:
-                route = dict(route)
-                tool_input = dict(route.get("tool_input", {})) if isinstance(route.get("tool_input"), dict) else {}
-                tool_input["query"] = validated_sql
-                route["tool_input"] = tool_input
-                route["validation_status"] = "regenerated_and_valid"
-            else:
-                route = dict(route)
-                route["validation_status"] = f"blocked_invalid_sql: {last_error}"
-                route["tool_name"] = ""
-                route["tool_input"] = {}
-        except Exception as regen_error:
-            route = dict(route)
-            route["validation_status"] = f"regeneration_error: {str(regen_error)}"
-            route["tool_name"] = ""
-            route["tool_input"] = {}
-
-        refined_routes.append(route)
+        for index in sql_route_indexes:
+            refined_routes[index] = future_by_index[index].result()
 
     return refined_routes

@@ -12,6 +12,7 @@ The product will allow users to:
 - Ask natural-language questions.
 - Receive concise, source-aware answers.
 - Ask follow-up questions within the same conversational session.
+- View session-scoped chat history between user and assistant turns without exposing internal tool/debug messages.
 
 The system will support both:
 
@@ -94,13 +95,15 @@ flowchart TD
 ## 6. End-to-End Query Lifecycle
 
 1. User submits a question.
-2. System loads session context and conversation thread identity.
-3. Planner decomposes question into one or more sub-questions.
-4. Each sub-question is assigned a retrieval path.
-5. Retrieval executes and returns candidate evidence.
-6. Candidate evidence is validated and reranked.
-7. Reflection checks completeness and decides whether to refine.
-8. Final answer is summarized and returned with source attribution.
+2. System blocks prompt input that violates sensitive-identifier policy before orchestration.
+3. System loads session context, bounded recent chat turns, and conversation thread identity.
+4. System resolves follow-up references into a standalone effective question when context is required.
+5. Planner prepares cached routing context (schema and few-shot examples) and decomposes the effective question into one or more sub-questions.
+6. Each sub-question is assigned a retrieval path using fast-path, model-driven routing, or deterministic fallback routing.
+7. Retrieval executes routes concurrently and returns candidate evidence.
+8. Candidate evidence is validated and reranked per route, then consolidated.
+9. Reflection checks completeness and decides whether to refine.
+10. Final answer is synthesized and returned with source attribution.
 
 ## 7. Routing Strategy
 
@@ -109,6 +112,8 @@ flowchart TD
 - Prefer structured retrieval when intent maps to known schema entities.
 - Prefer semantic retrieval for policy, guideline, and narrative content.
 - Use mixed execution when a question spans structured and unstructured domains.
+- Short-circuit to semantic-only fast-path when schema overlap is absent on the first attempt.
+- Resolve pronoun-based or referential follow-up turns into a standalone effective query before route planning.
 
 ### 7.2 Decomposition Rules
 
@@ -119,7 +124,7 @@ flowchart TD
 ### 7.3 Fallback Behavior
 
 - If planning output is invalid, apply deterministic fallback routing.
-- If structured retrieval is invalid or unsafe, route to semantic retrieval.
+- If structured retrieval is invalid at planning or runtime, route to semantic retrieval.
 - If no reliable route is available, return a bounded safe response.
 
 ## 8. Structured Retrieval Design
@@ -128,7 +133,7 @@ flowchart TD
 
 - Validate generated queries against live schema metadata.
 - Reject unknown tables and unknown columns.
-- Apply bounded repair attempts for recoverable issues.
+- Apply bounded repair attempts for recoverable schema-resolution issues.
 - Reroute to semantic retrieval when structured path remains invalid.
 
 ### 8.2 Reliability Controls
@@ -144,6 +149,7 @@ flowchart TD
 - Segment vector collections by knowledge domain.
 - Reserve system collections for planning examples and reasoning aids.
 - Exclude reserved collections from user-facing retrieval.
+- Auto-select user-facing collections when collection input is absent.
 
 ### 9.2 Retrieval Quality
 
@@ -166,15 +172,19 @@ flowchart TD
 
 ### 10.2 Final Response Composition
 
-- Select highest-confidence evidence.
+- Build one comprehensive final answer that addresses the full user question, even when execution uses multiple sub-questions.
+- Synthesize across consolidated SQL and semantic evidence gathered from relevant routes.
 - Produce concise summaries, not verbatim chunk dumps.
-- Include one citation line with source and page context.
+- Include source and page citations for the most relevant supporting evidence.
+- Keep sub-question and per-route evidence in raw/debug output only, not in the primary user-facing answer.
+- Render structured SQL results as an actual table when the user explicitly requests tabular output.
 
 ### 10.3 Reflection Loop
 
 - Evaluate completeness after execution.
 - Permit bounded refinement iterations.
 - Stop when answer is complete or attempt limit is reached.
+- Reuse cached reflection outcomes for repeated question-answer states within the same session thread.
 
 ## 11. Conversation and Session Design
 
@@ -183,12 +193,15 @@ flowchart TD
 - Persist orchestration checkpoints across turns within the same session thread.
 - Reuse the same session thread identity for follow-up questions.
 - Regenerate session thread identity only on explicit user reset.
+- Persist bounded user/assistant chat history for session-scoped transcript rendering.
+- Exclude internal tool/debug/system messages from the user-visible chat transcript.
+- Provide recent transcript turns to orchestration for follow-up question resolution.
 
 ### 11.2 Session Controls
 
 - Provide a visible session reset control in the query experience.
 - Surface active session identity for troubleshooting continuity.
-- Clear session-scoped answer state and feedback state on reset.
+- Clear session-scoped answer state, feedback state, and chat transcript state on reset.
 
 ## 12. Ingestion and Metadata Design
 
@@ -238,13 +251,15 @@ The system should be configurable for:
 - Reranking model configuration.
 - Parallelism and retry limits.
 - Reserved collection names.
+- Router and reflection cache limits and cache TTLs.
 
 ## 15. Operational Characteristics
 
 ### 15.1 Performance
 
-- Cache expensive planning context where safe.
+- Cache expensive planning context where safe using shared in-memory cache utilities.
 - Use fast-path routing when schema overlap is clearly absent.
+- Execute independent route retrieval concurrently with bounded worker settings.
 - Limit parallelism to workloads where overhead is justified.
 
 ### 15.2 Reliability
@@ -257,6 +272,8 @@ The system should be configurable for:
 
 - Log route decisions and fallback reasons.
 - Log validation status and retrieval confidence markers.
+- Log node-level timing metrics for router, executor, and reflection stages.
+- Log cache-hit indicators for reflection reuse diagnostics.
 - Track session-level continuity indicators for debugging.
 
 ## 16. Sequence Diagram

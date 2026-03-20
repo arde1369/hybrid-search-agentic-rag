@@ -38,7 +38,7 @@ def query_has_schema_overlap_parallel(query, schema_terms):
 
     try:
         ctx = get_context("spawn")
-        configured_workers = os.getenv("router_overlap_worker_count", "4")
+        configured_workers = os.getenv("concurrency_worker_count", "4")
         try:
             max_workers = max(1, int(configured_workers))
         except ValueError:

@@ -51,6 +51,46 @@ def _multimodal_collection_name() -> str:
     return os.getenv("upload_multimodal_collection_name", "uploaded_multimodal_documents")
 
 
+def _to_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_page_metadata(metadata: Dict[str, Any], fallback_index: int) -> Dict[str, Any]:
+    normalized = dict(metadata or {})
+
+    page = _to_int(
+        normalized.get("page")
+        or normalized.get("page_number")
+        or normalized.get("page_num")
+    )
+    page_index = _to_int(
+        normalized.get("page_index")
+        if normalized.get("page_index") is not None
+        else normalized.get("pageIndex")
+    )
+
+    # If only page_index is available, convert it to human-readable page numbering.
+    if page is None and page_index is not None:
+        page = page_index + 1
+
+    if page is None:
+        page = fallback_index + 1
+    if page < 1:
+        page = 1
+
+    if page_index is None:
+        page_index = page - 1
+    if page_index < 0:
+        page_index = 0
+
+    normalized["page"] = page
+    normalized["page_index"] = page_index
+    return normalized
+
+
 def _store_text_documents(
     pipeline,
     documents: List[Any],
@@ -62,11 +102,11 @@ def _store_text_documents(
     metadatas: List[Dict[str, Any]] = []
 
     for idx, doc in enumerate(documents):
-        page_content = str(getattr(doc, "page_content", "") or "").strip()
-        if not page_content:
+        raw_page_content = str(getattr(doc, "page_content", "") or "")
+        if not raw_page_content.strip():
             continue
 
-        metadata = dict(getattr(doc, "metadata", {}) or {})
+        metadata = _normalize_page_metadata(dict(getattr(doc, "metadata", {}) or {}), idx)
         metadata.update(
             {
                 "source_file": source_file,
@@ -74,7 +114,7 @@ def _store_text_documents(
                 "chunk_index": idx,
             }
         )
-        texts.append(page_content)
+        texts.append(raw_page_content)
         metadatas.append(metadata)
 
     if not texts:
@@ -104,11 +144,11 @@ def _store_multimodal_documents(
     normalized_embeddings: List[List[float]] = []
 
     for idx, (doc, embedding) in enumerate(zip(documents, embeddings)):
-        page_content = str(getattr(doc, "page_content", "") or "").strip()
-        if not page_content:
+        raw_page_content = str(getattr(doc, "page_content", "") or "")
+        if not raw_page_content.strip():
             continue
 
-        metadata = dict(getattr(doc, "metadata", {}) or {})
+        metadata = _normalize_page_metadata(dict(getattr(doc, "metadata", {}) or {}), idx)
         metadata.update(
             {
                 "source_file": source_file,
@@ -119,7 +159,7 @@ def _store_multimodal_documents(
 
         vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
 
-        texts.append(page_content)
+        texts.append(raw_page_content)
         metadatas.append(metadata)
         normalized_embeddings.append(vector)
 

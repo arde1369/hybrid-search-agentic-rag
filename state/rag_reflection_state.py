@@ -6,6 +6,9 @@ from .base_state import BaseState
 
 class RAGReflectionState(BaseState):
     question: str
+    effective_question: NotRequired[str]
+    conversation_context: NotRequired[str]
+    thread_id: NotRequired[str]
     collection_name: NotRequired[str]
     retrieved_docs: NotRequired[List[Document]]
     answer: NotRequired[Dict[str, Any]]

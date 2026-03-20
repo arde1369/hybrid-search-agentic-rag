@@ -4,10 +4,11 @@ import json
 from dao.sql.sql_dao import SQLDAO
 from dao.vector.chroma_db import ChromaDB
 from langgraph.graph import StateGraph, END, START
-from langchain_ollama import OllamaLLM
-from chromadb.utils import embedding_functions
 from langchain_core.messages import HumanMessage
+from models import OllamaModel, OpenAIModel
+from pipeline.prompts import build_follow_up_resolution_prompt
 from state.rag_reflection_state import RAGReflectionState
+from utilities.cache import InMemoryCache
 from utilities.reranker import Reranker
 from utilities.safety import POLICY_BLOCK_MESSAGE, should_block_ssn_prompt_input
 from langgraph.checkpoint.memory import MemorySaver
@@ -19,46 +20,56 @@ from pipeline.nodes import (
 )
 
 class Pipeline:
-    @staticmethod
-    def _normalize_ollama_model_name(model_name: str, default: str) -> str:
-        if not model_name:
-            return default
-        cleaned = model_name.strip().strip('"').strip("'")
-        # Accept values like "ollama:mistral" and pass only "mistral" to Ollama.
-        if ":" in cleaned:
-            prefix, value = cleaned.split(":", 1)
-            if prefix.lower() in {"ollama", "model"}:
-                return value
-        return cleaned
-
     def __init__(self):
         self.sql_dao = SQLDAO()
+        self.llm_provider = str(os.getenv("llm_provider", "ollama")).strip().lower()
 
-        self.ollama_host = os.getenv('ollama_host')
-        self.ollama_port = os.getenv('ollama_port')
-        self.ollama_model_name = self._normalize_ollama_model_name(
-            os.getenv('ollama_model_name'),
-            default='mistral'
-        )
-        self.ollama_embedding_model_name = self._normalize_ollama_model_name(
-            os.getenv('ollama_embedding_model_name'),
-            default='nomic-embed-text'
-        )
+        if self.llm_provider == "openai":
+            self.model_provider = OpenAIModel()
+        else:
+            self.model_provider = OllamaModel()
 
-        self.embedding_function = embedding_functions.OllamaEmbeddingFunction(
-                model_name=self.ollama_embedding_model_name,
-                url=f"http://{self.ollama_host}:{self.ollama_port}/api/embeddings"
-            )
+        self.embedding_function = self.model_provider.create_embedding_function()
+
+        try:
+            router_cache_ttl_seconds = max(1, int(os.getenv("router_cache_ttl_seconds", "120")))
+        except ValueError:
+            router_cache_ttl_seconds = 120
+
+        try:
+            router_cache_max_entries = max(1, int(os.getenv("router_cache_max_entries", "1")))
+        except ValueError:
+            router_cache_max_entries = 1
+
+        try:
+            reflection_cache_max_entries = max(1, int(os.getenv("reflection_cache_max_entries", "200")))
+        except ValueError:
+            reflection_cache_max_entries = 200
+
+        try:
+            reflection_cache_ttl_raw = int(os.getenv("reflection_cache_ttl_seconds", "0"))
+        except ValueError:
+            reflection_cache_ttl_raw = 0
+        reflection_cache_ttl_seconds = reflection_cache_ttl_raw if reflection_cache_ttl_raw > 0 else None
         
         self.vector_db = ChromaDB(embedding_func=self.embedding_function)
-        self.llm_agent = OllamaLLM(
-            model=self.ollama_model_name,
-            base_url=f"http://{self.ollama_host}:{self.ollama_port}"
-        )
+        self.llm_agent = self.model_provider.create_llm()
         self.reranker = Reranker(self.llm_agent)
         self.dao_tools = [self.vector_db.as_retriever_tool(), *self.sql_dao.get_sql_tools()]
         self._memory = MemorySaver()
         self._graph = None
+        self._router_schema_cache = InMemoryCache(
+            max_entries=router_cache_max_entries,
+            default_ttl_seconds=router_cache_ttl_seconds,
+        )
+        self._router_few_shot_cache = InMemoryCache(
+            max_entries=router_cache_max_entries,
+            default_ttl_seconds=router_cache_ttl_seconds,
+        )
+        self._reflection_cache = InMemoryCache(
+            max_entries=reflection_cache_max_entries,
+            default_ttl_seconds=reflection_cache_ttl_seconds,
+        )
 
     def router_node(self, state : RAGReflectionState) -> RAGReflectionState:
         return run_router_node(self, state)
@@ -72,6 +83,27 @@ class Pipeline:
 
     def _should_continue_refining(self, state: RAGReflectionState) -> str:
         return should_continue_refining_node(state)
+
+    def _resolve_effective_question(self, question: str, conversation_context: str = "") -> str:
+        question = str(question or "").strip()
+        conversation_context = str(conversation_context or "").strip()
+        if not question or not conversation_context:
+            return question
+
+        prompt = build_follow_up_resolution_prompt(
+            question=question,
+            conversation_context=conversation_context,
+        )
+
+        try:
+            result = self.llm_agent.invoke(prompt)
+            if not isinstance(result, str):
+                result = str(result)
+            resolved_question = result.strip()
+            return resolved_question or question
+        except Exception as ex:
+            print(f"[PIPELINE] Failed to resolve follow-up question: {ex}")
+            return question
 
     def build_graph(self):
         """
@@ -133,7 +165,7 @@ class Pipeline:
             "messages": [HumanMessage(content=question)],
         }
 
-    def run_graph(self, question: str, collection_name: str = "", thread_id: str = ""):
+    def run_graph(self, question: str, collection_name: str = "", thread_id: str = "", conversation_context: str = ""):
         """
         Execute the compiled LangGraph with an input question.
         
@@ -144,7 +176,11 @@ class Pipeline:
             Final state containing the answer and reflection history
         """
         question = str(question or "").strip()
+        conversation_context = str(conversation_context or "").strip()
+        effective_question = self._resolve_effective_question(question, conversation_context)
         print(f"Running RAG Pipeline for question: {question}")
+        if effective_question != question:
+            print(f"Resolved follow-up question to: {effective_question}")
 
         if should_block_ssn_prompt_input(question):
             print("[SAFETY] Blocked prompt input due to SSN policy.")
@@ -157,7 +193,10 @@ class Pipeline:
         
         initial_state: RAGReflectionState = {
             "question": question,
+            "effective_question": effective_question,
+            "conversation_context": conversation_context,
             "collection_name": collection_name,
+            "thread_id": resolved_thread_id,
             "retrieved_docs": [],
             "answer": {},
             "reflection": "",

@@ -187,6 +187,7 @@ class ChromaDB:
             selected_collection = (collection_name or "").strip()
             if not selected_collection:
                 raise ValueError("collection_name is required for vector retrieval.")
+
             print(
                 f"[VECTOR RETRIEVER] Querying collection='{selected_collection}' "
                 f"with n_results={n_results}"

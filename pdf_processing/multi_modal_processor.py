@@ -53,6 +53,10 @@ class MultiModalPDFProcessor(MultiModalParent):
         Process the PDF file, extracting both text and images, and creating embeddings for each.
         """
         self.pdf_path = pdf_path
+        # Ensure each processing run starts clean so no prior-file artifacts affect indexing.
+        self.all_documents = []
+        self.all_embeddings = []
+        self.image_data_storage = {}
         doc = fitz.open(pdf_path)
 
         splitter = RecursiveCharacterTextSplitter(chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)

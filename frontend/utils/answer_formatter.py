@@ -68,6 +68,10 @@ def extract_answer_text(final_state) -> str:
         if policy_message:
             return policy_message
 
+        final_answer = str(answer.get("final_answer", "") or "").strip()
+        if final_answer:
+            return final_answer
+
         results = answer.get("results", [])
         if results:
             lines = []
