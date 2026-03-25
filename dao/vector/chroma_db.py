@@ -17,8 +17,21 @@ class ChromaDB:
         self.port = int(os.getenv('chroma_db_port'))
         self.client = chromadb.HttpClient(host=self.host, port=self.port)
         self.embedding_func = embedding_func
+        self.default_n_results = self._parse_n_results(os.getenv("chroma_db_n_results", "10"))
         self._multimodal_processor = None
         self.retriever = None
+
+    def _parse_n_results(self, raw_value):
+        try:
+            parsed = int(raw_value)
+            return parsed if parsed > 0 else 10
+        except (TypeError, ValueError):
+            return 10
+
+    def _resolve_n_results(self, n_results):
+        if n_results is None:
+            return self.default_n_results
+        return self._parse_n_results(n_results)
 
     def _is_probably_multimodal_collection(self, collection_name: str) -> bool:
         name = str(collection_name or "").strip().lower()
@@ -81,20 +94,21 @@ class ChromaDB:
         return self._get_collection_internal(name)
 
     @tool
-    def similarity_search(self, collection_name, query_texts, n_results=5):
+    def similarity_search(self, collection_name, query_texts, n_results=None):
         """
         Runs a similarity search (semantic select) against the collection
         using explicit query embeddings from the configured embedding function.
         """
+        resolved_n_results = self._resolve_n_results(n_results)
         collection = self._get_collection_internal(collection_name)
         query_payload = query_texts if isinstance(query_texts, list) else [query_texts]
         if self._is_probably_multimodal_collection(collection_name):
             query_embeddings = self._embed_query_texts(query_payload, use_multimodal=True)
-            return collection.query(query_embeddings=query_embeddings, n_results=n_results)
+            return collection.query(query_embeddings=query_embeddings, n_results=resolved_n_results)
 
         try:
             query_embeddings = self._embed_query_texts(query_payload, use_multimodal=False)
-            results = collection.query(query_embeddings=query_embeddings, n_results=n_results)
+            results = collection.query(query_embeddings=query_embeddings, n_results=resolved_n_results)
         except InvalidArgumentError as ex:
             error_message = str(ex)
             if "dimension" not in error_message.lower():
@@ -104,16 +118,17 @@ class ChromaDB:
                 "Retrying with CLIP text embeddings for multimodal collection."
             )
             query_embeddings = self._embed_query_texts(query_payload, use_multimodal=True)
-            results = collection.query(query_embeddings=query_embeddings, n_results=n_results)
+            results = collection.query(query_embeddings=query_embeddings, n_results=resolved_n_results)
         return results
     
     @tool
-    def similarity_search_with_scores(self, collection_name, query, n_results=5):
+    def similarity_search_with_scores(self, collection_name, query, n_results=None):
         """
         Similar to similarity_search but also returns similarity scores.
         """
+        resolved_n_results = self._resolve_n_results(n_results)
         collection = self._get_collection_internal(collection_name)
-        results = self._query_collection_with_fallback(collection, str(query or ""), n_results)
+        results = self._query_collection_with_fallback(collection, str(query or ""), resolved_n_results)
 
         distances = results.get("distances", [[]])
         distance_list = distances[0] if distances and isinstance(distances[0], list) else []
@@ -165,14 +180,15 @@ class ChromaDB:
             metadatas=metadata_payload,
         )
 
-    def as_retriever(self, search_type="similarity", score_threshold=0.5, n_results=5, ):
+    def as_retriever(self, search_type="similarity", score_threshold=float(os.getenv("vector_similarity_threshold", 0.8)), n_results=None, ):
         """
         Returns a retriever function that can be used in LangChain pipelines.
         """
+        resolved_n_results = self._resolve_n_results(n_results)
         if search_type == "similarity_score_threshold":
             self.retriever = self.client.as_retriever(
                 search_type=search_type,
-                search_kwargs={"k": n_results,"score_threshold": score_threshold}
+                search_kwargs={"k": resolved_n_results,"score_threshold": score_threshold}
             )
         else:
             self.retriever = self.client.as_retriever(search_type=search_type)
@@ -182,19 +198,21 @@ class ChromaDB:
     def as_retriever_tool(self):
         """Returns a vector retrieval tool backed by direct Chroma queries."""
 
-        def _retrieve(query: str, collection_name: str, n_results: int = 5):
+        def _retrieve(query: str, collection_name: str, n_results: int = None):
             """Retrieve relevant documents from a specific Chroma collection using semantic search."""
             selected_collection = (collection_name or "").strip()
             if not selected_collection:
                 raise ValueError("collection_name is required for vector retrieval.")
 
+            resolved_n_results = self._resolve_n_results(n_results)
+
             print(
                 f"[VECTOR RETRIEVER] Querying collection='{selected_collection}' "
-                f"with n_results={n_results}"
+                f"with n_results={resolved_n_results}"
             )
 
             collection = self._get_collection_internal(selected_collection)
-            response = self._query_collection_with_fallback(collection, str(query or ""), n_results)
+            response = self._query_collection_with_fallback(collection, str(query or ""), resolved_n_results)
 
             documents = response.get("documents", [[]])
             metadatas = response.get("metadatas", [[]])

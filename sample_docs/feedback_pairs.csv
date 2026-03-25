@@ -1,0 +1,546 @@
+User query: Show me 5 customers from the customers table
+Sub-query: Show me 5 customers from the customers table
+SQL: SELECT * FROM customers LIMIT 5;
+---
+User query: show me orders from customers
+Sub-query: show me orders from customers
+SQL: SELECT o.orderNumber, c.customerName, o.order_date FROM orders o INNER JOIN customers c ON o.customerNumber = c.customerNumber;
+---
+User query: show me customer orders
+Sub-query: show me customer orders
+SQL: SELECT o.orderNumber, c.customerName, o.order_date FROM orders o JOIN customers c ON o.customerNumber = c.customerNumber;
+---
+User query: Get all the customers
+Sub-query: Get all the customers
+SQL: SELECT * FROM customers;
+---
+User query: Get all the orders and their corresponding customer names for a specific customer ID (e.g., 123)
+Sub-query: Get all the orders and their corresponding customer names for a specific customer ID (e.g., 123)
+SQL: SELECT o.*, c.CustomerName FROM orders o JOIN customers c ON o.customerNumber = c.customerNumber WHERE o.customerNumber = 123;
+---
+User query: Get all the products and their quantities for a specific order ID (e.g., 456)
+Sub-query: Get all the products and their quantities for a specific order ID (e.g., 456)
+SQL: SELECT pi.productNumber, SUM(quantity) AS total_quantity FROM order_items pi WHERE pi.orderNumber = 456 GROUP BY pi.productNumber;
+---
+User query: Get all the orders with their corresponding customer names and cities for a specific month (e.g., January) and year (e.g., 2021)
+Sub-query: Get all the orders with their corresponding customer names and cities for a specific month (e.g., January) and year (e.g., 2021)
+SQL: SELECT o.*, c.CustomerName, c.city FROM orders o JOIN customers c ON o.customerNumber = c.customerNumber WHERE DATE_FORMAT(o.orderDate, '%Y-%m') = '2021-01' ;
+---
+User query: Get all the orders and their corresponding customer names
+Sub-query: Get all the orders and their corresponding customer names
+SQL: SELECT o.orderNumber, c.CustomerName FROM orders o JOIN customers c ON o.customerNumber = c.customerNumber;
+---
+User query: Get all the products and their quantities ordered
+Sub-query: Get all the products and their quantities ordered
+SQL: SELECT p.productCode, p.productName, SUM(it.quantityOrdered) as total_quantity FROM orderdetails it INNER JOIN products p ON it.productCode = p.productCode GROUP BY p.productCode,p.productName
+---
+User query: Show me 5 customers from the customers table
+Sub-query: Show me 5 customers from the customers table
+SQL: SELECT * FROM demo_db.customers LIMIT 5;
+---
+User query: show me what was ordered and it quantity
+Sub-query: show me what was ordered and it quantity
+SQL: SELECT oi.quantity, p.ProductName FROM order_items as oi JOIN products as p ON oi.productNumber = p.productNumber;
+---
+User query: show all the customers
+Sub-query: show all the customers
+SQL: SELECT * FROM demo_db.customers;
+---
+User query: Show me orders
+Sub-query: Show me orders
+SQL: SELECT * FROM orders;
+---
+User query: calculate total orders of all customers
+Sub-query: calculate total orders of all customers
+SQL: SELECT COUNT(DISTINCT o.orderNumber) as total_orders FROM orders o;
+---
+User query: how many customer records ?
+Sub-query: how many customer records ?
+SQL: SELECT COUNT(*) FROM demo_db.customers;
+---
+User query: how many customer are from each state?
+Sub-query: how many customer are from each state?
+SQL: SELECT state, COUNT(*) as num_customers FROM demo_db.customers GROUP BY state;
+---
+User query: how many orders have a "status" other than shipped
+Sub-query: how many orders have a "status" other than shipped
+SQL: SELECT COUNT(*) as total_orders, SUM(CASE WHEN orders.status != 'Shipped' THEN 1 ELSE 0 END) as unshipped_orders FROM orders;.
+---
+User query: show me list of all customers
+Sub-query: show me list of all customers
+SQL: SELECT * FROM customers;
+---
+User query: show me list of all orders
+Sub-query: show me list of all orders
+SQL: SELECT * FROM orderdetails;
+---
+User query: show me list of all orders
+Sub-query: show me list of all orders
+SQL: SELECT orderNumber, productCode, quantityOrdered FROM orderdetails;
+---
+User query: show me customer count by each state
+Sub-query: show me customer count by each state
+SQL: SELECT CONCAT(country, ' ', state) as location, COUNT(*) as count FROM customers GROUP BY CONCAT(country, ' ', state);
+---
+User query: show me a list all customers with no state
+Sub-query: show me a list all customers with no state
+SQL: SELECT * FROM customers WHERE state IS NULL;
+---
+User query: Show me 5 customers from the customers table
+Sub-query: Show me 5 customers from the customers table
+SQL: SELECT * FROM demo_db.customers LIMIT 5;
+---
+User query: show me all customers
+Sub-query: show me all customers
+SQL: SELECT * FROM demo_db.customers;
+---
+User query: show me customer count by each state
+Sub-query: show me customer count by each state
+SQL: SELECT concat(country, ' ', state) as location, count(*) as count FROM customers GROUP BY concat(country, ' ', state);
+---
+User query: give me a count of customers by state
+Sub-query: give me a count of customers by state
+SQL: SELECT COUNT(*) AS customer_count, state FROM customers GROUP BY state;
+---
+User query: show me all customers
+Sub-query: show me all customers
+SQL: SELECT * FROM customers;
+---
+User query: how many orders have a "status" other than shipped
+Sub-query: how many orders have a "status" other than shipped
+SQL: SELECT COUNT(*) as total_orders, SUM(CASE WHEN orders.status != 'Shipped' THEN 1 ELSE 0 END) as unshipped_orders FROM orders;
+---
+User query: show me all customers by state
+Sub-query: show me all customers by state
+SQL: SELECT state, COUNT(*) AS customer_count FROM customers GROUP BY state;
+---
+User query: show me list of all customers b y state
+Sub-query: show me list of all customers b y state
+SQL: SELECT state, COUNT(*) AS customer_count FROM customers GROUP BY state;
+---
+User query: Show me count of  all orders by customer
+Sub-query: Show me count of  all orders by customer
+SQL: SELECT c.customerName AS CustomerName, COUNT(o.orderNumber) AS OrderCount
+   FROM customers c
+   JOIN orders o ON c.customerNumber = o.customerNumber
+   GROUP BY c.CustomerName;
+---
+User query: Show order totals by each state show top 5 states
+Sub-query: Show order totals by each state show top 5 states
+SQL: SELECT c.state AS State, SUM(od.quantityOrdered * od.priceEach) AS TotalOrders, COUNT(DISTINCT od.orderNumber) AS NumberOfOrders
+   FROM customers c
+   JOIN orders o ON c.customerNumber = o.customerNumber
+   JOIN orderdetails od ON o.orderNumber = od.orderNumber
+   GROUP BY c.state
+   ORDER BY SUM(od.quantityOrdered) DESC, c.state LIMIT 5;
+---
+User query: Show total order totals by each state show top 5 states
+Sub-query: Show total order totals by each state show top 5 states
+SQL: SELECT c.state AS State, SUM(od.quantityOrdered * od.priceEach) AS TotalOrders
+      FROM customers c
+      JOIN orders o ON c.customerNumber = o.customerNumber
+      JOIN orderdetails od ON o.orderNumber = od.orderNumber
+      GROUP BY c.state
+      ORDER BY SUM(od.quantityOrdered * od.priceEach) DESC, c.state LIMIT 5;
+---
+User query: show me a list of all customer who have not ordered for past 1 year
+Sub-query: show me a list of all customer who have not ordered for past 1 year
+SQL: SELECT distinct c.customerName AS CustomerName
+FROM customers c
+LEFT JOIN orders o ON c.customerNumber = o.customerNumber
+WHERE o.orderDate IS NULL 
+   OR o.orderDate < DATE_SUB(CURDATE(), INTERVAL 1 YEAR);
+---
+User query: show me a list of all customer who have not ordered for past one year
+Sub-query: show me a list of all customer who have not ordered for past one year
+SQL: SELECT distinct c.customerName AS CustomerName
+   FROM customers c
+   LEFT JOIN orders o ON c.customerNumber = o.customerNumber
+   WHERE o.orderDate IS NULL
+     OR o.orderDate < DATE_SUB(CURDATE(), INTERVAL 1 YEAR);
+---
+User query: show me a list of all customer who have not ordered for past one year
+Sub-query: show me a list of all customer who have not ordered for past one year
+SQL: SELECT distinct c.customerName AS CustomerName
+   FROM customers c
+   LEFT JOIN orders o ON c.customerNumber = o.customerNumber
+   WHERE o.orderDate IS NULL
+     OR o.orderDate < DATE_SUB(CURDATE(), INTERVAL 1 YEAR);
+---
+User query: show me a list of all customer in California who have not ordered for past one year
+Sub-query: show me a list of all customer in California who have not ordered for past one year
+SQL: SELECT distinct c.customerName AS CustomerName
+   FROM customers c
+   LEFT JOIN orders o ON c.customerNumber = o.customerNumber
+   WHERE c.state = 'CA'
+     AND (o.orderDate IS NULL OR o.orderDate < DATE_SUB(CURDATE(), INTERVAL 1 YEAR));
+---
+User query: How many customer have orders in last 1 year
+Sub-query: How many customer have orders in last 1 year
+SQL: SELECT COUNT(DISTINCT o.customerNumber) AS NumberOfCustomersWithOrdersInLastYear
+   FROM Orders AS o
+   JOIN OrderItems AS oi ON o.orderNumber = oi.orderNumber
+   WHERE o.orderDate >= DATE_SUB(NOW(), INTERVAL 1 YEAR);
+---
+User query: How many customer have orders in last 1 year
+Sub-query: How many customer have orders in last 1 year
+SQL: SELECT COUNT(DISTINCT o.customerNumber) AS NumberOfCustomersWithOrdersInLastYear
+   FROM orders AS o
+   JOIN orderdetails AS oi ON o.orderNumber = oi.orderNumber
+---
+User query: How many customer have orders in last 1 year
+Sub-query: How many customer have orders in last 1 year
+SQL: SELECT COUNT(DISTINCT o.customerNumber) AS NumberOfCustomersWithOrdersInLastYear
+   FROM orders AS o
+   JOIN orderdetails AS oi ON o.orderNumber = oi.orderNumber
+---
+User query: How many customer are in CA
+Sub-query: How many customer are in CA
+SQL: SELECT COUNT(*) as num_customers FROM customers WHERE state = 'CA';
+---
+User query: How many customer are in CA
+Sub-query: How many customer are in CA
+SQL: SELECT COUNT(*) AS num_customers FROM customers WHERE state = 'CA';
+---
+User query: what are the sales in the state of CA
+Sub-query: what are the sales in the state of CA
+SQL: SELECT SUM(orderdetails.quantityOrdered * priceEach) as total_sales FROM orderdetails
+   INNER JOIN orders ON orderdetails.orderNumber = orders.orderNumber 
+   INNER JOIN customers ON orders.customerNumber = customers.customerNumber
+   WHERE customers.state = 'CA';
+---
+User query: list all the sales in the state of CA
+Sub-query: list all the sales in the state of CA
+SQL: SELECT SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   WHERE c.state = 'CA';
+---
+User query: Show me customers in CA
+Sub-query: Show me customers in CA
+SQL: SELECT * FROM customers WHERE state = 'CA';
+---
+User query: what are the sales in the state of MD
+Sub-query: what are the sales in the state of MD
+SQL: SELECT SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   WHERE c.state = 'MD';
+---
+User query: what are the sales by state
+Sub-query: what are the sales by state
+SQL: SELECT c.state, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   GROUP BY c.state;
+---
+User query: what are the sales by each office?
+Sub-query: what are the sales by each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: what are the sales for each office?
+Sub-query: what are the sales for each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: Which customers  list top 5 ordered the most ?
+Sub-query: Which customers  list top 5 ordered the most ?
+SQL: SELECT count(o.orderNumber),c.customerNumber, c.customerName
+   FROM customers AS c
+   JOIN orders AS o ON c.customerNumber = o.customerNumber
+   GROUP BY c.customerNumber, c.customerName  order by 1 desc 
+Limit 5
+---
+User query: Which customers list top 5 ordered the most ?
+Sub-query: Which customers list top 5 ordered the most ?
+SQL: SELECT count(o.orderNumber),c.customerNumber, c.customerName
+   FROM customers AS c
+   JOIN orders AS o ON c.customerNumber = o.customerNumber
+   GROUP BY c.customerNumber, c.customerName  order by 1 desc
+   LIMIT 5
+---
+User query: what are the sales numbers by each office?
+Sub-query: what are the sales numbers by each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: what is the sum of sales by each office?
+Sub-query: what is the sum of sales by each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: Which customers list top 5 ordered the most ?
+Sub-query: Which customers list top 5 ordered the most ?
+SQL: SELECT count(o.orderNumber),c.customerNumber, c.customerName
+   FROM customers AS c
+   JOIN orders AS o ON c.customerNumber = o.customerNumber
+   GROUP BY c.customerNumber, c.customerName  order by 1 desc
+   LIMIT 5
+---
+User query: Which are the top 5 customers with most orders?
+Sub-query: Which are the top 5 customers with most orders?
+SQL: SELECT count(o.orderNumber), c.customerNumber, c.customerName
+   FROM orders AS o
+   JOIN customers AS c ON o.customerNumber = c.customerNumber
+   GROUP BY c.customerNumber, c.customerName
+   ORDER BY count(o.orderNumber) DESC
+   LIMIT 5;
+---
+User query: List top 5 customers who ordered the most with their states .
+Sub-query: List top 5 customers who ordered the most with their states .
+SQL: SELECT count(o.orderNumber) TTL_ORDERS, c.customerNumber CustomerID, c.customerName CustomerName, c.state CustomerState
+   FROM orders AS o
+   JOIN customers AS c ON o.customerNumber = c.customerNumber
+   GROUP BY c.customerNumber, c.customerName, c.state
+   ORDER BY count(o.orderNumber) DESC
+   LIMIT 5;
+---
+User query: count all the customers
+Sub-query: count all the customers
+SQL: SELECT COUNT(*) AS total_customers FROM customers;
+---
+User query: Which are the top 5 customer with most orders ?
+Sub-query: Which are the top 5 customer with most orders ?
+SQL: SELECT customer.customerNumber, customer.customerName, COUNT(orders.orderNumber) AS total_orders
+   FROM customers customer
+   INNER JOIN orders ON customer.customerNumber = orders.customerNumber
+   GROUP BY customer.customerNumber, customer.customerName
+   ORDER BY total_orders DESC
+   LIMIT 5;
+---
+User query: can you tell me total sales by each office?
+Sub-query: can you tell me total sales by each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: can you tell me what are the sales by each office?
+Sub-query: can you tell me what are the sales by each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: can you tell be sales by each office?
+Sub-query: can you tell be sales by each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: Get all the orders with their corresponding customer names, cities, and total quantity of products ordered for a specific year and month  January 2003  (e.g., 2021)
+Sub-query: Get all the orders with their corresponding customer names, cities, and total quantity of products ordered for a specific year and month  January 2003  (e.g., 2021)
+SQL: SELECT o.*, c.customerName, c.city FROM orders o JOIN customers c ON o.customerNumber = c.customerNumber WHERE DATE_FORMAT(o.orderDate, '%Y-%m') = '2003-01' ;
+---
+User query: count all the customers
+Sub-query: count all the customers
+SQL: SELECT COUNT(*) AS total_customers FROM customers;  -- Assuming 'customer' is the table containing the customers
+---
+User query: count all the customers
+Sub-query: count all the customers
+SQL: select count(*) as total_customers from customers;
+---
+User query: can you tell be sales by each office?
+Sub-query: can you tell be sales by each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: Give me a count of customers by State
+Sub-query: Give me a count of customers by State
+SQL: select count(*) as customer_count, state from customers group by state;
+---
+User query: Give me a count of customers by State
+Sub-query: Give me a count of customers by State
+SQL: SELECT state, COUNT(customerNumber) AS customer_count
+FROM customers
+GROUP BY  state;
+---
+User query: Give me a count of customers by State
+Sub-query: Give me a count of customers by State
+SQL: select state, count(customerNumber) as customer_count
+from customers
+group by state;
+---
+User query: can you tell be sales by each office?
+Sub-query: can you tell be sales by each office?
+SQL: SELECT off.city, SUM(od.quantityOrdered * od.priceEach) as total_sales
+   FROM orderdetails AS od
+   INNER JOIN orders AS o ON od.orderNumber = o.orderNumber
+   INNER JOIN customers AS c ON o.customerNumber = c.customerNumber
+   INNER JOIN demo_db.employees AS e ON c.salesRepEmployeeNumber = e.employeeNumber
+   INNER JOIN  offices AS off ON e.officeCode =off.officeCode
+   GROUP BY off.city;
+---
+User query: Give me a list of customers who have never ordered.
+Sub-query: Give me a list of customers who have never ordered.
+SQL: SELECT DISTINCT c.customerName AS CustomerName
+FROM customers c
+WHERE c.customerNumber NOT IN (
+    SELECT customerNumber FROM orders
+)
+---
+User query: Provide a count of customers  by state
+Sub-query: Provide a count of customers  by state
+SQL: select count(*) as customer_count, state from customers group by state;
+---
+User query: Provide count of customers by state
+Sub-query: Provide count of customers by state
+SQL: SELECT state AS location, COUNT(*) AS customer_count
+FROM customers
+GROUP BY state;
+---
+User query: Provide count of customers in each  by state. Write a valid executable sql
+Sub-query: Provide count of customers in each  by state. Write a valid executable sql
+SQL: select state, count(*) as customer_count
+from customers
+group by state;
+---
+User query: Provide count of customers in each by state
+Sub-query: Provide count of customers in each by state
+SQL: SELECT state AS location, COUNT(customerNumber) AS customer_count
+FROM customers
+GROUP BY state;
+---
+User query: Give me a list of customers who have never ordered.
+Sub-query: Give me a list of customers who have never ordered.
+SQL: SELECT DISTINCT c.customerName AS customername
+FROM customers c
+LEFT JOIN orders o ON c.customerNumber = o.customerNumber
+WHERE o.orderNumber IS NULL;
+---
+User query: Provide list of customers who have never ordered.
+Sub-query: Provide list of customers who have never ordered.
+SQL: SELECT DISTINCT c.customerName AS customername
+FROM customers c
+LEFT JOIN orders o ON c.customerNumber = o.customerNumber
+WHERE o.orderNumber IS NULL;
+---
+User query: Provide me with a count of customers by state, ignore records where state is null
+Sub-query: Provide me with a count of customers by state, ignore records where state is null
+SQL: SELECT state AS state, COUNT(*) AS Count FROM customers where state is not null GROUP BY state ORDER BY Count DESC
+---
+User query: Provide count of customers by state
+Sub-query: Provide count of customers by state
+SQL: SELECT state AS state, COUNT(*) AS Count FROM customers GROUP BY state ORDER BY Count DESC
+---
+User query: Give me a summary of sales and orders by state
+Sub-query: Give me a summary of sales and orders by state
+SQL: SELECT c.state, COUNT(o.orderNumber) AS total_orders, SUM(od.quantityOrdered * od.priceEach) AS total_sales
+FROM customers AS c
+JOIN orders AS o ON c.customerNumber = o.customerNumber
+JOIN orderdetails AS od ON o.orderNumber = od.orderNumber
+GROUP BY c.state;
+---
+User query: Give me a summary of sales and order by state
+Sub-query: Give me a summary of sales and order by state
+SQL: SELECT c.state, SUM(od.quantityOrdered * od.priceEach) AS total_sales, COUNT(o.orderNumber) AS total_orders
+FROM customers AS c
+JOIN orders AS o ON c.customerNumber = o.customerNumber
+JOIN orderdetails AS od ON o.orderNumber = od.orderNumber
+GROUP BY c.state;
+---
+User query: Give me a summary of sales and order by state and only show summary from USA
+Sub-query: Give me a summary of sales and order by state and only show summary from USA
+SQL: SELECT c.state AS state, SUM(od.quantityOrdered * od.priceEach) AS total_sales, COUNT(o.orderNumber) AS total_orders
+FROM customers AS c
+JOIN orders AS o ON c.customerNumber = o.customerNumber
+JOIN orderdetails AS od ON o.orderNumber = od.orderNumber
+WHERE c.country = 'USA'
+GROUP BY c.state
+ORDER BY c.state;
+---
+User query: Give me a summary of sales and order by state and only show summary from USA
+Sub-query: Give me a summary of sales and order by state and only show summary from USA
+SQL: SELECT c.state AS state, SUM(od.quantityOrdered * od.priceEach) AS total_sales, COUNT(o.orderNumber) AS total_orders
+FROM customers AS c
+JOIN orders AS o ON c.customerNumber = o.customerNumber
+JOIN orderdetails AS od ON o.orderNumber = od.orderNumber
+WHERE c.country = 'USA'
+GROUP BY c.state
+ORDER BY c.state;
+---
+User query: Give me a summary of sales and order by state and only show summary from USA
+Sub-query: Give me a summary of sales and order by state and only show summary from USA
+SQL: SELECT c.state AS state, SUM(od.quantityOrdered * od.priceEach) AS total_sales, COUNT(o.orderNumber) AS total_orders
+FROM customers AS c
+JOIN orders AS o ON c.customerNumber = o.customerNumber
+JOIN orderdetails AS od ON o.orderNumber = od.orderNumber
+WHERE c.country = 'USA'
+GROUP BY c.state
+ORDER BY c.state;
+---
+User query: Give me a summary of sales and order by state
+Sub-query: Give me a summary of sales and order by state
+SQL: select c.state, sum(od.quantityOrdered * od.priceEach) as total_sales, count(o.orderNumber) as total_orders
+from customers as c
+join orders as o on c.customerNumber = o.customerNumber
+join orderdetails as od on o.orderNumber = od.orderNumber
+group by c.state;
+---
+User query: How many customer in the database
+Sub-query: How many customer in the database
+SQL: select count(*) from customers;
+---
+User query: Give me a summary of sales and order by state
+Sub-query: Give me a summary of sales and order by state
+SQL: select c.state, sum(od.quantityOrdered * od.priceEach) as total_sales, count(o.orderNumber) as total_orders
+from customers as c
+join orders as o on c.customerNumber = o.customerNumber
+join orderdetails as od on o.orderNumber = od.orderNumber
+group by c.state;
+---
+User query: Give me sales for California
+Sub-query: Give me sales for California
+SQL: select  sum(od.quantityOrdered * od.priceEach) as total_sales, count(o.orderNumber) as total_orders
+from customers as c
+join orders as o on c.customerNumber = o.customerNumber
+join orderdetails as od on o.orderNumber = od.orderNumber
+WHERE c.state = 'CA';
+---
+User query: Give me a summary of sales and order by state
+Sub-query: Give me a summary of sales and order by state
+SQL: select c.state, sum(od.quantityordered * od.priceeach) as total_sales, count(o.ordernumber) as total_orders
+from customers AS c
+join orders AS o ON c.customerNumber= o.customerNumber
+join orderdetails AS od ON o.ordernumber = od.ordernumber
+group by c.state
+order by c.state;
