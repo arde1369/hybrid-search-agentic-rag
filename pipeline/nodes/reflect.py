@@ -1,6 +1,7 @@
 from pipeline.prompts import build_reflection_prompt
 import os
 from utilities.cache import InMemoryCache, build_cache_key
+from utilities.llm_output import llm_result_to_text
 from utilities.timer import Timer
 
 
@@ -28,8 +29,7 @@ def reflect_node(pipeline, state):
             timer.start("llm")
             generated_result = pipeline.llm_agent.invoke(prompt)
             llm_duration_ms = timer.elapsed_ms("llm")
-            if not isinstance(generated_result, str):
-                generated_result = str(generated_result)
+            generated_result = llm_result_to_text(generated_result)
             Timer.log("reflect", llm_ms=llm_duration_ms, cache_hit=False)
             return generated_result
 
@@ -46,6 +46,6 @@ def reflect_node(pipeline, state):
 
 
 def should_continue_refining(state):
-    if not state.get("revised", False) or state.get("attempts", 0) >= int(os.getenv("MAX_REFINE_ATTEMPTS", 2)):
+    if not state.get("revised", False) or state.get("attempts", 0) >= int(os.getenv("MAX_REFINE_ATTEMPTS", 1)):
         return "end"
     return "refine"

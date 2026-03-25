@@ -1,5 +1,4 @@
-import json
-import os
+import os, json
 from concurrent.futures import ThreadPoolExecutor
 
 from langchain_classic.schema import Document
@@ -7,6 +6,7 @@ from langchain_classic.schema import Document
 from pipeline.prompts import build_final_answer_prompt, build_vector_synthesis_prompt
 from pipeline.nodes.sql import invoke_tool
 from pipeline.nodes.vector import validate_vector_route_documents
+from utilities.llm_output import llm_result_to_text
 from utilities.safety import (
     POLICY_BLOCK_MESSAGE,
     answer_results_contain_ssn,
@@ -181,9 +181,7 @@ def _synthesize_general_final_answer(pipeline, question, compiled_results):
 
     try:
         result = pipeline.llm_agent.invoke(prompt)
-        if not isinstance(result, str):
-            result = str(result)
-        return result.strip()
+        return llm_result_to_text(result).strip()
     except Exception as ex:
         print(f"[EXECUTOR] Failed to synthesize final answer: {ex}")
         return ""
@@ -204,9 +202,7 @@ def _synthesize_final_answer(pipeline, question, vector_documents):
 
     try:
         result = pipeline.llm_agent.invoke(prompt)
-        if not isinstance(result, str):
-            result = str(result)
-        return result.strip()
+        return llm_result_to_text(result).strip()
     except Exception as ex:
         print(f"[EXECUTOR] Failed to synthesize final vector answer: {ex}")
         return ""
@@ -295,7 +291,7 @@ def executor_node(pipeline, state):
             routes=len(routes),
             policy_blocked=True,
         )
-        print(f"Executor node completed. State: {json.dumps(state, default=str, indent=2)}")
+        print(f"[EXECUTOR] Completed. routes={len(routes)} policy_blocked=True")
         return state
 
     state["retrieved_docs"] = reranked_documents
@@ -316,5 +312,5 @@ def executor_node(pipeline, state):
         total_ms=timer.total_ms(),
         routes=len(routes),
     )
-    print(f"Executor node completed. State: {json.dumps(state, default=str, indent=2)}")
+    print(f"[EXECUTOR] Completed. routes={len(routes)} final_answer_len={len(final_answer)}")
     return state

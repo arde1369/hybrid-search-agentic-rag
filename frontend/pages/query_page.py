@@ -8,6 +8,7 @@ from frontend.components.chat_history_component import render_chat_history_compo
 from frontend.components.raw_output_component import render_raw_output_component
 from frontend.services.query_feedback_service import save_good_sql_feedback
 from frontend.services.session_service import get_query_thread_id, reset_query_session
+from frontend.utils.answer_formatter import to_display_text
 
 
 GOLDEN_SQL_COLLECTION = os.getenv("chroma_db_collection_golden_sql", "golden_sql_collection")
@@ -74,9 +75,10 @@ def _render_official_answer_table(results: list) -> bool:
 
 
 def _render_official_answer(pipeline, question: str, results: list, policy_message: str) -> None:
-    if policy_message:
+    clean_policy_message = to_display_text(policy_message)
+    if clean_policy_message:
         st.subheader("Official Answer")
-        st.write(policy_message)
+        st.write(clean_policy_message)
         return
 
     if _question_requests_table(question) and _render_official_answer_table(results):
@@ -84,7 +86,7 @@ def _render_official_answer(pipeline, question: str, results: list, policy_messa
 
     final_state = st.session_state.get("last_query_final_state")
     answer = final_state.get("answer", {}) if isinstance(final_state, dict) else {}
-    final_answer = str(answer.get("final_answer", "") or "").strip() if isinstance(answer, dict) else ""
+    final_answer = to_display_text(answer.get("final_answer", "")) if isinstance(answer, dict) else ""
 
     if final_answer:
         st.subheader("Official Answer")
@@ -111,9 +113,10 @@ def _render_official_answer(pipeline, question: str, results: list, policy_messa
 
 
 def _render_reflection(reflection: str) -> None:
-    if reflection:
+    reflection_text = to_display_text(reflection)
+    if reflection_text:
         st.markdown("**Reflection**")
-        st.write(str(reflection).strip())
+        st.write(reflection_text)
 
 
 def _render_feedback_buttons(pipeline, feedback_entries: list) -> None:
@@ -175,7 +178,7 @@ def render_query_page(pipeline) -> None:
 
             answer = final_state.get("answer", {}) if isinstance(final_state, dict) else {}
             results = answer.get("results", []) if isinstance(answer, dict) else []
-            policy_message = str(answer.get("policy_message", "") or "").strip() if isinstance(answer, dict) else ""
+            policy_message = to_display_text(answer.get("policy_message", "")) if isinstance(answer, dict) else ""
             reflection = final_state.get("reflection", "") if isinstance(final_state, dict) else ""
             if isinstance(final_state, dict):
                 question = final_state.get("effective_question", "") or final_state.get("question", "")

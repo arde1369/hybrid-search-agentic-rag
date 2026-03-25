@@ -472,5 +472,5 @@ def router_node(pipeline, state):
 
     state["routes"] = routes
     _log_router_completion("fallback", prep_duration_ms, llm_duration_ms, timer, routes)
-    print(f"State: {json.dumps(state, default=str, indent=2)}")
+    print(f"[ROUTER] Fallback completed. routes={len(routes)} collection={selected_collection}")
     return state

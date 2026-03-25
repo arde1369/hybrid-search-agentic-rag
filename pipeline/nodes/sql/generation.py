@@ -1,6 +1,7 @@
 import re
 
 from pipeline.prompts import build_sql_generation_prompt, build_sql_repair_prompt
+from utilities.llm_output import llm_result_to_text
 
 
 def extract_sql_from_text(text: str) -> str:
@@ -30,9 +31,7 @@ def generate_sql_with_schema(pipeline, sub_query: str, schema_json: str, previou
     )
 
     generated = pipeline.llm_agent.invoke(generation_prompt)
-    if not isinstance(generated, str):
-        generated = str(generated)
-    return extract_sql_from_text(generated)
+    return extract_sql_from_text(llm_result_to_text(generated))
 
 
 def repair_sql_query_with_schema(pipeline, sub_query: str, broken_sql: str, error_message: str) -> str:
@@ -49,9 +48,7 @@ def repair_sql_query_with_schema(pipeline, sub_query: str, broken_sql: str, erro
     )
 
     repaired = pipeline.llm_agent.invoke(repair_prompt)
-    if not isinstance(repaired, str):
-        repaired = str(repaired)
-    return extract_sql_from_text(repaired)
+    return extract_sql_from_text(llm_result_to_text(repaired))
 
 
 def enrich_sql_routes_with_live_schema(pipeline, routes):

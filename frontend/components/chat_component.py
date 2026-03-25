@@ -2,7 +2,7 @@ import streamlit as st
 
 from frontend.services.query_feedback_service import extract_sql_feedback_entries
 from frontend.services.session_service import append_chat_turn, get_chat_context, get_query_thread_id
-from frontend.utils.answer_formatter import extract_answer_text
+from frontend.utils.answer_formatter import extract_answer_text, to_display_text
 from pipeline.prompts import build_vector_answer_prompt
 from utilities.safety import redact_ssn_values
 
@@ -114,9 +114,7 @@ def _summarize_vector_document(pipeline, user_query: str, doc: dict) -> str:
 
     try:
         result = pipeline.llm_agent.invoke(prompt)
-        if not isinstance(result, str):
-            result = str(result)
-        text = result.strip()
+        text = to_display_text(result)
         if text:
             return text
     except Exception:
@@ -137,11 +135,11 @@ def build_chat_response_text(pipeline, final_state: dict) -> str:
     if not isinstance(answer, dict):
         return extract_answer_text(final_state)
 
-    policy_message = str(answer.get("policy_message", "") or "").strip()
+    policy_message = to_display_text(answer.get("policy_message", ""))
     if policy_message:
         return policy_message
 
-    final_answer = str(answer.get("final_answer", "") or "").strip()
+    final_answer = to_display_text(answer.get("final_answer", ""))
     if final_answer:
         return final_answer
 
@@ -164,16 +162,17 @@ def build_chat_response_text(pipeline, final_state: dict) -> str:
 
 
 def render_chat_component(pipeline) -> None:
-    query = st.text_area(
-        "User query",
-        placeholder="Enter a question here...",
-        height=140,
-        key="user_query_input",
-        label_visibility="collapsed",
-    )
-    _, run_col = st.columns([4, 1.1])
-    with run_col:
-        run_clicked = st.button("Run query", type="primary", key="run_query_btn", use_container_width=True)
+    with st.form(key="query_form", clear_on_submit=False):
+        query = st.text_area(
+            "User query",
+            placeholder="Enter a question here...",
+            height=140,
+            key="user_query_input",
+            label_visibility="collapsed",
+        )
+        _, run_col = st.columns([4, 1.1])
+        with run_col:
+            run_clicked = st.form_submit_button("Run query", type="primary", use_container_width=True)
 
     if run_clicked:
         if not query.strip():

@@ -1,6 +1,25 @@
 import json
 
 
+def to_display_text(value) -> str:
+    if value is None:
+        return ""
+
+    if isinstance(value, dict):
+        if "content" in value:
+            return to_display_text(value.get("content"))
+        return str(value).strip()
+
+    content = getattr(value, "content", None)
+    if content is not None:
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            return "\n".join(str(item) for item in content).strip()
+
+    return str(value).strip()
+
+
 def _format_dict_row(data: dict) -> str:
     first = str(data.get("firstname", "")).strip()
     last = str(data.get("lastname", "")).strip()
@@ -44,7 +63,7 @@ def _format_doc_content(content: str) -> str:
 
 
 def _clean_reflection(reflection: str) -> str:
-    text = str(reflection or "").strip()
+    text = to_display_text(reflection)
     if not text:
         return ""
     if text.lower().startswith("reflection:"):
@@ -64,11 +83,11 @@ def extract_answer_text(final_state) -> str:
         reflection = final_state.get("reflection", reflection)
 
     if isinstance(answer, dict):
-        policy_message = str(answer.get("policy_message", "") or "").strip()
+        policy_message = to_display_text(answer.get("policy_message", ""))
         if policy_message:
             return policy_message
 
-        final_answer = str(answer.get("final_answer", "") or "").strip()
+        final_answer = to_display_text(answer.get("final_answer", ""))
         if final_answer:
             return final_answer
 
@@ -92,4 +111,4 @@ def extract_answer_text(final_state) -> str:
                 lines.append(_clean_reflection(reflection))
             return "\\n".join(lines).strip()
 
-    return str(answer if answer is not None else final_state)
+    return to_display_text(answer if answer is not None else final_state)

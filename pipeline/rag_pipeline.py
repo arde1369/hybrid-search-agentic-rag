@@ -1,5 +1,4 @@
 import os
-import json
 
 from dao.sql.sql_dao import SQLDAO
 from dao.vector.chroma_db import ChromaDB
@@ -9,6 +8,7 @@ from models import OllamaModel, OpenAIModel
 from pipeline.prompts import build_follow_up_resolution_prompt
 from state.rag_reflection_state import RAGReflectionState
 from utilities.cache import InMemoryCache
+from utilities.llm_output import llm_result_to_text
 from utilities.reranker import Reranker
 from utilities.safety import POLICY_BLOCK_MESSAGE, should_block_ssn_prompt_input
 from langgraph.checkpoint.memory import MemorySaver
@@ -97,9 +97,7 @@ class Pipeline:
 
         try:
             result = self.llm_agent.invoke(prompt)
-            if not isinstance(result, str):
-                result = str(result)
-            resolved_question = result.strip()
+            resolved_question = llm_result_to_text(result).strip()
             return resolved_question or question
         except Exception as ex:
             print(f"[PIPELINE] Failed to resolve follow-up question: {ex}")
@@ -208,5 +206,10 @@ class Pipeline:
         
         final_state = graph.invoke(initial_state, config=config)
         print(f"RAG Pipeline completed for question: {question}")
-        print(f"Final state: {json.dumps(final_state, default=str, indent=2)}")
+        route_count = len(final_state.get("routes", [])) if isinstance(final_state, dict) else 0
+        attempt_count = final_state.get("attempts", 0) if isinstance(final_state, dict) else 0
+        has_policy_message = bool(final_state.get("answer", {}).get("policy_message")) if isinstance(final_state, dict) else False
+        print(
+            f"[PIPELINE] Summary: routes={route_count} attempts={attempt_count} policy_blocked={has_policy_message}"
+        )
         return final_state
