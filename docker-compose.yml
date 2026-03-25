@@ -24,7 +24,7 @@ services:
       - "11434:11434"
     volumes:
       - ollama_models:/root/.ollama
-      - ./zscaler-root.cer:/usr/local/share/ca-certificates/zscaler-root.crt:ro
+      - ./zscaler-root.crt:/usr/local/share/ca-certificates/zscaler-root.crt:ro
     entrypoint: ["/bin/sh", "-c", "update-ca-certificates && ollama serve & sleep 5 && ollama pull llama3.1:8b && ollama pull nomic-embed-text && tail -f /dev/null"]
 
   chromadb:
@@ -71,8 +71,17 @@ services:
       # Cohere Reranker Configuration (uppercase - as per cohere SDK)
       - COHERE_API_KEY=${COHERE_API_KEY}
       - cohere_rerank_model=rerank-v4.0
+
+      # Zscaler
+      - PIP_CERT=/etc/ssl/certs/ca-certificates.crt
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+      - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+      - HF_HUB_CERTIFICATE=/etc/ssl/certs/ca-certificates.crt
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+      - SSL_CERT_DIR=/etc/ssl/certs
     volumes:
       - .:/app
+      - ./zscaler-root.crt:/usr/local/share/ca-certificates/zscaler-root.crt:ro
     working_dir: /app
 
 volumes:
