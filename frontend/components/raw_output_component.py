@@ -19,6 +19,10 @@ def render_raw_output_component(final_state: dict) -> None:
                 f"**Route:** `{raw_item.get('route', '')}` &nbsp;|&nbsp; "
                 f"**Sub-query:** {raw_item.get('query', '')}"
             )
+            sql_query = str(raw_item.get("sql_query", "") or "").strip()
+            if sql_query:
+                st.markdown("**SQL statement used:**")
+                st.code(sql_query, language="sql")
             raw_docs = raw_item.get("documents", [])
             if raw_docs:
                 for raw_doc in raw_docs:

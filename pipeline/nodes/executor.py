@@ -209,6 +209,11 @@ def _synthesize_final_answer(pipeline, question, vector_documents):
 
 
 def _execute_route(pipeline, route, question):
+    sql_query = ""
+    tool_input = route.get("tool_input", {}) if isinstance(route.get("tool_input"), dict) else {}
+    if route.get("route") == "sql":
+        sql_query = str(tool_input.get("query", "") or "").strip()
+
     validation_status = str(route.get("validation_status", ""))
     if route.get("route") == "sql" and (
         validation_status.startswith("blocked_invalid_sql")
@@ -220,10 +225,15 @@ def _execute_route(pipeline, route, question):
             "tool_name": route.get("tool_name"),
             "reason": route.get("reason", ""),
             "validation_status": validation_status,
+            "sql_query": sql_query,
             "documents": [],
         }, []
 
     output = invoke_tool(pipeline, route)
+    if route.get("route") == "sql":
+        updated_input = route.get("tool_input", {}) if isinstance(route.get("tool_input"), dict) else {}
+        sql_query = str(updated_input.get("query", sql_query) or "").strip()
+
     documents = _to_documents(output, route)
     ranked_documents = pipeline.reranker.rerank(route.get("sub_query", question), documents)
     ranked_documents = validate_vector_route_documents(route, ranked_documents)
@@ -234,6 +244,7 @@ def _execute_route(pipeline, route, question):
             "route": route.get("route"),
             "tool_name": route.get("tool_name"),
             "reason": route.get("reason", ""),
+            "sql_query": sql_query,
             "documents": _serialize_documents(ranked_documents),
         },
         ranked_documents,
